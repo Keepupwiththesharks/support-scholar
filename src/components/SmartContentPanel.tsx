@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -232,6 +232,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     conflicts: { imported: ContentPreset; existing: ContentPreset }[];
   } | null>(null);
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'overwrite' | 'keep_both' | 'skip'>>({});
+  const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetCategory, setPresetCategory] = useState<PresetCategory>('general');
@@ -372,6 +373,18 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     setConflictResolutions(
       Object.fromEntries(pendingImport.conflicts.map(c => [c.imported.name, action]))
     );
+  };
+
+  const toggleConflictPreview = (presetName: string) => {
+    setExpandedConflicts(prev => {
+      const next = new Set(prev);
+      if (next.has(presetName)) {
+        next.delete(presetName);
+      } else {
+        next.add(presetName);
+      }
+      return next;
+    });
   };
 
   // Drag end handlers
@@ -1192,7 +1205,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
 
     {/* Conflict Resolution Dialog */}
     <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
@@ -1217,51 +1230,173 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           </Button>
         </div>
         
-        <div className="max-h-72 overflow-y-auto space-y-3 py-2">
-          {pendingImport?.conflicts.map((conflict) => (
-            <div key={conflict.imported.name} className="p-3 rounded-lg border bg-muted/30">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-sm truncate">{conflict.imported.name}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Existing: {conflict.existing.content.insights.length} insights, {conflict.existing.content.keyTakeaways.length} takeaways
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Imported: {conflict.imported.content.insights.length} insights, {conflict.imported.content.keyTakeaways.length} takeaways
-                  </p>
+        <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
+          {pendingImport?.conflicts.map((conflict) => {
+            const isExpanded = expandedConflicts.has(conflict.imported.name);
+            return (
+              <div key={conflict.imported.name} className="rounded-lg border bg-muted/30 overflow-hidden">
+                <div className="p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-sm truncate">{conflict.imported.name}</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => toggleConflictPreview(conflict.imported.name)}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          Preview
+                          {isExpanded ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Existing: {conflict.existing.content.insights.length} insights, {conflict.existing.content.keyTakeaways.length} takeaways, {conflict.existing.content.actionItems.length} actions
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Imported: {conflict.imported.content.insights.length} insights, {conflict.imported.content.keyTakeaways.length} takeaways, {conflict.imported.content.actionItems.length} actions
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      variant={conflictResolutions[conflict.imported.name] === 'overwrite' ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
+                    >
+                      <ArrowLeftRight className="w-3 h-3 mr-1" />
+                      Overwrite
+                    </Button>
+                    <Button
+                      variant={conflictResolutions[conflict.imported.name] === 'keep_both' ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
+                    >
+                      <Copy className="w-3 h-3 mr-1" />
+                      Keep Both
+                    </Button>
+                    <Button
+                      variant={conflictResolutions[conflict.imported.name] === 'skip' ? 'secondary' : 'outline'}
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      Skip
+                    </Button>
+                  </div>
                 </div>
+                
+                {/* Side-by-side diff preview */}
+                {isExpanded && (
+                  <div className="border-t bg-background">
+                    <div className="grid grid-cols-2 divide-x">
+                      {/* Existing preset */}
+                      <div className="p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded">Existing</span>
+                          <span className="text-xs text-muted-foreground">Updated {new Date(conflict.existing.updatedAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="space-y-3 text-xs">
+                          <div>
+                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <Lightbulb className="w-3 h-3" /> Insights ({conflict.existing.content.insights.length})
+                            </p>
+                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
+                              {conflict.existing.content.insights.slice(0, 5).map((item, i) => (
+                                <li key={i} className="truncate">• {item}</li>
+                              ))}
+                              {conflict.existing.content.insights.length > 5 && (
+                                <li className="text-muted-foreground">+{conflict.existing.content.insights.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <Target className="w-3 h-3" /> Takeaways ({conflict.existing.content.keyTakeaways.length})
+                            </p>
+                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
+                              {conflict.existing.content.keyTakeaways.slice(0, 5).map((item, i) => (
+                                <li key={i} className="truncate">✓ {item}</li>
+                              ))}
+                              {conflict.existing.content.keyTakeaways.length > 5 && (
+                                <li className="text-muted-foreground">+{conflict.existing.content.keyTakeaways.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <ArrowRight className="w-3 h-3" /> Actions ({conflict.existing.content.actionItems.length})
+                            </p>
+                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
+                              {conflict.existing.content.actionItems.slice(0, 5).map((item, i) => (
+                                <li key={i} className="truncate">☐ {item}</li>
+                              ))}
+                              {conflict.existing.content.actionItems.length > 5 && (
+                                <li className="text-muted-foreground">+{conflict.existing.content.actionItems.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Imported preset */}
+                      <div className="p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded">Imported</span>
+                          <span className="text-xs text-muted-foreground">From file</span>
+                        </div>
+                        <div className="space-y-3 text-xs">
+                          <div>
+                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <Lightbulb className="w-3 h-3" /> Insights ({conflict.imported.content.insights.length})
+                            </p>
+                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
+                              {conflict.imported.content.insights.slice(0, 5).map((item, i) => (
+                                <li key={i} className="truncate">• {item}</li>
+                              ))}
+                              {conflict.imported.content.insights.length > 5 && (
+                                <li className="text-muted-foreground">+{conflict.imported.content.insights.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <Target className="w-3 h-3" /> Takeaways ({conflict.imported.content.keyTakeaways.length})
+                            </p>
+                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
+                              {conflict.imported.content.keyTakeaways.slice(0, 5).map((item, i) => (
+                                <li key={i} className="truncate">✓ {item}</li>
+                              ))}
+                              {conflict.imported.content.keyTakeaways.length > 5 && (
+                                <li className="text-muted-foreground">+{conflict.imported.content.keyTakeaways.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <ArrowRight className="w-3 h-3" /> Actions ({conflict.imported.content.actionItems.length})
+                            </p>
+                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
+                              {conflict.imported.content.actionItems.slice(0, 5).map((item, i) => (
+                                <li key={i} className="truncate">☐ {item}</li>
+                              ))}
+                              {conflict.imported.content.actionItems.length > 5 && (
+                                <li className="text-muted-foreground">+{conflict.imported.content.actionItems.length - 5} more</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="flex gap-2 mt-3">
-                <Button
-                  variant={conflictResolutions[conflict.imported.name] === 'overwrite' ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1 text-xs"
-                  onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
-                >
-                  <ArrowLeftRight className="w-3 h-3 mr-1" />
-                  Overwrite
-                </Button>
-                <Button
-                  variant={conflictResolutions[conflict.imported.name] === 'keep_both' ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1 text-xs"
-                  onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
-                >
-                  <Copy className="w-3 h-3 mr-1" />
-                  Keep Both
-                </Button>
-                <Button
-                  variant={conflictResolutions[conflict.imported.name] === 'skip' ? 'secondary' : 'outline'}
-                  size="sm"
-                  className="flex-1 text-xs"
-                  onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
-                >
-                  <X className="w-3 h-3 mr-1" />
-                  Skip
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         
         {pendingImport && pendingImport.presets.length > 0 && (
