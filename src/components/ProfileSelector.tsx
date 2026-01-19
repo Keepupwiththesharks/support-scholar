@@ -283,6 +283,7 @@ export const ProfileSelector = ({
         open={showCustomManager}
         onOpenChange={setShowCustomManager}
         selectedCustomProfileId={selectedCustomProfileId}
+        currentProfileType={selectedProfile}
         onSelectProfile={(profileId) => {
           handleSelectCustomProfile(profileId);
           setShowCustomManager(false);
