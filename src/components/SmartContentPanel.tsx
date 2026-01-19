@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp, GitMerge } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -225,14 +225,21 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
-  const [importResult, setImportResult] = useState<{ imported: number; overwritten: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; overwritten: number; merged: number; skipped: number } | null>(null);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [pendingImport, setPendingImport] = useState<{
     presets: ContentPreset[];
     conflicts: { imported: ContentPreset; existing: ContentPreset }[];
   } | null>(null);
-  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'overwrite' | 'keep_both' | 'skip'>>({});
+  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'overwrite' | 'keep_both' | 'skip' | 'cherry_pick'>>({});
   const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
+  
+  // Cherry-pick selections: { presetName: { insights: Set<string>, takeaways: Set<string>, actions: Set<string> } }
+  const [cherryPickSelections, setCherryPickSelections] = useState<Record<string, {
+    insights: Set<string>;
+    takeaways: Set<string>;
+    actions: Set<string>;
+  }>>({});
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetCategory, setPresetCategory] = useState<PresetCategory>('general');
@@ -333,7 +340,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     
     if (result.errors.length > 0 && result.presets.length === 0 && result.conflicts.length === 0) {
       setImportErrors(result.errors);
-      setImportResult({ imported: 0, overwritten: 0, skipped: 0 });
+      setImportResult({ imported: 0, overwritten: 0, merged: 0, skipped: 0 });
     } else if (result.conflicts.length > 0) {
       // Show conflict resolution dialog
       setPendingImport({ presets: result.presets, conflicts: result.conflicts });
@@ -356,23 +363,51 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const handleApplyConflictResolutions = () => {
     if (!pendingImport) return;
     
-    const resolutions = Object.entries(conflictResolutions).map(([presetName, action]) => ({
-      presetName,
-      action,
-    }));
+    const resolutions = Object.entries(conflictResolutions).map(([presetName, action]) => {
+      if (action === 'cherry_pick') {
+        const selections = cherryPickSelections[presetName];
+        return {
+          presetName,
+          action,
+          cherryPickedContent: selections ? {
+            insights: Array.from(selections.insights),
+            keyTakeaways: Array.from(selections.takeaways),
+            actionItems: Array.from(selections.actions),
+          } : undefined,
+        };
+      }
+      return { presetName, action };
+    });
     
     const result = applyImport(pendingImport.presets, resolutions, pendingImport.conflicts);
     setImportResult(result);
     setShowConflictDialog(false);
     setPendingImport(null);
     setConflictResolutions({});
+    setCherryPickSelections({});
   };
 
-  const handleSetAllConflicts = (action: 'overwrite' | 'keep_both' | 'skip') => {
+  const handleSetAllConflicts = (action: 'overwrite' | 'keep_both' | 'skip' | 'cherry_pick') => {
     if (!pendingImport) return;
     setConflictResolutions(
       Object.fromEntries(pendingImport.conflicts.map(c => [c.imported.name, action]))
     );
+    
+    // Initialize cherry-pick selections if setting to cherry_pick
+    if (action === 'cherry_pick') {
+      const newSelections: Record<string, { insights: Set<string>; takeaways: Set<string>; actions: Set<string> }> = {};
+      pendingImport.conflicts.forEach(c => {
+        // Start with existing items selected
+        newSelections[c.imported.name] = {
+          insights: new Set(c.existing.content.insights),
+          takeaways: new Set(c.existing.content.keyTakeaways),
+          actions: new Set(c.existing.content.actionItems),
+        };
+      });
+      setCherryPickSelections(newSelections);
+      // Auto-expand all for cherry-pick
+      setExpandedConflicts(new Set(pendingImport.conflicts.map(c => c.imported.name)));
+    }
   };
 
   const toggleConflictPreview = (presetName: string) => {
@@ -385,6 +420,56 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
       }
       return next;
     });
+  };
+
+  const initializeCherryPick = (conflict: { imported: ContentPreset; existing: ContentPreset }) => {
+    const presetName = conflict.imported.name;
+    setConflictResolutions(prev => ({ ...prev, [presetName]: 'cherry_pick' }));
+    setCherryPickSelections(prev => ({
+      ...prev,
+      [presetName]: {
+        insights: new Set(conflict.existing.content.insights),
+        takeaways: new Set(conflict.existing.content.keyTakeaways),
+        actions: new Set(conflict.existing.content.actionItems),
+      },
+    }));
+    setExpandedConflicts(prev => new Set([...prev, presetName]));
+  };
+
+  const toggleCherryPickItem = (
+    presetName: string,
+    type: 'insights' | 'takeaways' | 'actions',
+    item: string
+  ) => {
+    setCherryPickSelections(prev => {
+      const current = prev[presetName] || { insights: new Set(), takeaways: new Set(), actions: new Set() };
+      const newSet = new Set(current[type]);
+      if (newSet.has(item)) {
+        newSet.delete(item);
+      } else {
+        newSet.add(item);
+      }
+      return {
+        ...prev,
+        [presetName]: { ...current, [type]: newSet },
+      };
+    });
+  };
+
+  const selectAllFromSource = (
+    presetName: string,
+    source: 'existing' | 'imported',
+    conflict: { imported: ContentPreset; existing: ContentPreset }
+  ) => {
+    const content = source === 'existing' ? conflict.existing.content : conflict.imported.content;
+    setCherryPickSelections(prev => ({
+      ...prev,
+      [presetName]: {
+        insights: new Set(content.insights),
+        takeaways: new Set(content.keyTakeaways),
+        actions: new Set(content.actionItems),
+      },
+    }));
   };
 
   // Drag end handlers
@@ -994,13 +1079,16 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           {importResult && (
             <div className={cn(
               "p-3 rounded-lg text-sm",
-              importResult.imported > 0 || importResult.overwritten > 0 ? "bg-green-500/10 text-green-700" : "bg-amber-500/10 text-amber-700"
+              importResult.imported > 0 || importResult.overwritten > 0 || importResult.merged > 0 ? "bg-green-500/10 text-green-700" : "bg-amber-500/10 text-amber-700"
             )}>
               {importResult.imported > 0 && (
                 <p>✓ Successfully imported {importResult.imported} preset{importResult.imported !== 1 ? 's' : ''}</p>
               )}
               {importResult.overwritten > 0 && (
                 <p>✓ Overwrote {importResult.overwritten} existing preset{importResult.overwritten !== 1 ? 's' : ''}</p>
+              )}
+              {importResult.merged > 0 && (
+                <p>✓ Merged {importResult.merged} preset{importResult.merged !== 1 ? 's' : ''}</p>
               )}
               {importResult.skipped > 0 && (
                 <p>⚠ Skipped {importResult.skipped} preset{importResult.skipped !== 1 ? 's' : ''}</p>
@@ -1259,11 +1347,11 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex gap-2 mt-3 flex-wrap">
                     <Button
                       variant={conflictResolutions[conflict.imported.name] === 'overwrite' ? 'default' : 'outline'}
                       size="sm"
-                      className="flex-1 text-xs"
+                      className="text-xs"
                       onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
                     >
                       <ArrowLeftRight className="w-3 h-3 mr-1" />
@@ -1272,16 +1360,25 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                     <Button
                       variant={conflictResolutions[conflict.imported.name] === 'keep_both' ? 'default' : 'outline'}
                       size="sm"
-                      className="flex-1 text-xs"
+                      className="text-xs"
                       onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
                     >
                       <Copy className="w-3 h-3 mr-1" />
                       Keep Both
                     </Button>
                     <Button
+                      variant={conflictResolutions[conflict.imported.name] === 'cherry_pick' ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => initializeCherryPick(conflict)}
+                    >
+                      <GitMerge className="w-3 h-3 mr-1" />
+                      Cherry-Pick
+                    </Button>
+                    <Button
                       variant={conflictResolutions[conflict.imported.name] === 'skip' ? 'secondary' : 'outline'}
                       size="sm"
-                      className="flex-1 text-xs"
+                      className="text-xs"
                       onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
                     >
                       <X className="w-3 h-3 mr-1" />
@@ -1290,9 +1387,38 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                   </div>
                 </div>
                 
-                {/* Side-by-side diff preview */}
+                {/* Side-by-side diff preview with cherry-pick support */}
                 {isExpanded && (
                   <div className="border-t bg-background">
+                    {/* Cherry-pick mode header */}
+                    {conflictResolutions[conflict.imported.name] === 'cherry_pick' && (
+                      <div className="px-3 py-2 bg-primary/5 border-b flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <GitMerge className="w-4 h-4 text-primary" />
+                          <span className="font-medium text-primary">Cherry-Pick Mode</span>
+                          <span className="text-muted-foreground">- Select items to include in the merged preset</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => selectAllFromSource(conflict.imported.name, 'existing', conflict)}
+                          >
+                            Select All Existing
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => selectAllFromSource(conflict.imported.name, 'imported', conflict)}
+                          >
+                            Select All Imported
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-2 divide-x">
                       {/* Existing preset */}
                       <div className="p-3">
@@ -1305,39 +1431,96 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <Lightbulb className="w-3 h-3" /> Insights ({conflict.existing.content.insights.length})
                             </p>
-                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
-                              {conflict.existing.content.insights.slice(0, 5).map((item, i) => (
-                                <li key={i} className="truncate">• {item}</li>
-                              ))}
-                              {conflict.existing.content.insights.length > 5 && (
-                                <li className="text-muted-foreground">+{conflict.existing.content.insights.length - 5} more</li>
-                              )}
+                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                              {conflict.existing.content.insights.map((item, i) => {
+                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.insights.has(item);
+                                return (
+                                  <li 
+                                    key={i} 
+                                    className={cn(
+                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
+                                      isCherryPick && "cursor-pointer hover:bg-muted/50",
+                                      isCherryPick && isSelected && "bg-primary/10"
+                                    )}
+                                    onClick={() => isCherryPick && toggleCherryPickItem(conflict.imported.name, 'insights', item)}
+                                  >
+                                    {isCherryPick && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        onChange={() => {}}
+                                        className="mt-0.5 rounded border-muted-foreground"
+                                      />
+                                    )}
+                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>{isCherryPick ? '' : '• '}{item}</span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                           <div>
                             <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <Target className="w-3 h-3" /> Takeaways ({conflict.existing.content.keyTakeaways.length})
                             </p>
-                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
-                              {conflict.existing.content.keyTakeaways.slice(0, 5).map((item, i) => (
-                                <li key={i} className="truncate">✓ {item}</li>
-                              ))}
-                              {conflict.existing.content.keyTakeaways.length > 5 && (
-                                <li className="text-muted-foreground">+{conflict.existing.content.keyTakeaways.length - 5} more</li>
-                              )}
+                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                              {conflict.existing.content.keyTakeaways.map((item, i) => {
+                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.has(item);
+                                return (
+                                  <li 
+                                    key={i} 
+                                    className={cn(
+                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
+                                      isCherryPick && "cursor-pointer hover:bg-muted/50",
+                                      isCherryPick && isSelected && "bg-primary/10"
+                                    )}
+                                    onClick={() => isCherryPick && toggleCherryPickItem(conflict.imported.name, 'takeaways', item)}
+                                  >
+                                    {isCherryPick && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        onChange={() => {}}
+                                        className="mt-0.5 rounded border-muted-foreground"
+                                      />
+                                    )}
+                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>{isCherryPick ? '' : '✓ '}{item}</span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                           <div>
                             <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <ArrowRight className="w-3 h-3" /> Actions ({conflict.existing.content.actionItems.length})
                             </p>
-                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
-                              {conflict.existing.content.actionItems.slice(0, 5).map((item, i) => (
-                                <li key={i} className="truncate">☐ {item}</li>
-                              ))}
-                              {conflict.existing.content.actionItems.length > 5 && (
-                                <li className="text-muted-foreground">+{conflict.existing.content.actionItems.length - 5} more</li>
-                              )}
+                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                              {conflict.existing.content.actionItems.map((item, i) => {
+                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.actions.has(item);
+                                return (
+                                  <li 
+                                    key={i} 
+                                    className={cn(
+                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
+                                      isCherryPick && "cursor-pointer hover:bg-muted/50",
+                                      isCherryPick && isSelected && "bg-primary/10"
+                                    )}
+                                    onClick={() => isCherryPick && toggleCherryPickItem(conflict.imported.name, 'actions', item)}
+                                  >
+                                    {isCherryPick && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        onChange={() => {}}
+                                        className="mt-0.5 rounded border-muted-foreground"
+                                      />
+                                    )}
+                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>{isCherryPick ? '' : '☐ '}{item}</span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         </div>
@@ -1354,44 +1537,129 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <Lightbulb className="w-3 h-3" /> Insights ({conflict.imported.content.insights.length})
                             </p>
-                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
-                              {conflict.imported.content.insights.slice(0, 5).map((item, i) => (
-                                <li key={i} className="truncate">• {item}</li>
-                              ))}
-                              {conflict.imported.content.insights.length > 5 && (
-                                <li className="text-muted-foreground">+{conflict.imported.content.insights.length - 5} more</li>
-                              )}
+                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                              {conflict.imported.content.insights.map((item, i) => {
+                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.insights.has(item);
+                                const isInExisting = conflict.existing.content.insights.includes(item);
+                                return (
+                                  <li 
+                                    key={i} 
+                                    className={cn(
+                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
+                                      isCherryPick && !isInExisting && "cursor-pointer hover:bg-muted/50",
+                                      isCherryPick && isSelected && "bg-primary/10",
+                                      isCherryPick && isInExisting && "opacity-50"
+                                    )}
+                                    onClick={() => isCherryPick && !isInExisting && toggleCherryPickItem(conflict.imported.name, 'insights', item)}
+                                  >
+                                    {isCherryPick && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        disabled={isInExisting}
+                                        onChange={() => {}}
+                                        className="mt-0.5 rounded border-muted-foreground"
+                                      />
+                                    )}
+                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>
+                                      {isCherryPick ? '' : '• '}{item}
+                                      {isCherryPick && isInExisting && <span className="text-muted-foreground ml-1">(duplicate)</span>}
+                                    </span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                           <div>
                             <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <Target className="w-3 h-3" /> Takeaways ({conflict.imported.content.keyTakeaways.length})
                             </p>
-                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
-                              {conflict.imported.content.keyTakeaways.slice(0, 5).map((item, i) => (
-                                <li key={i} className="truncate">✓ {item}</li>
-                              ))}
-                              {conflict.imported.content.keyTakeaways.length > 5 && (
-                                <li className="text-muted-foreground">+{conflict.imported.content.keyTakeaways.length - 5} more</li>
-                              )}
+                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                              {conflict.imported.content.keyTakeaways.map((item, i) => {
+                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.has(item);
+                                const isInExisting = conflict.existing.content.keyTakeaways.includes(item);
+                                return (
+                                  <li 
+                                    key={i} 
+                                    className={cn(
+                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
+                                      isCherryPick && !isInExisting && "cursor-pointer hover:bg-muted/50",
+                                      isCherryPick && isSelected && "bg-primary/10",
+                                      isCherryPick && isInExisting && "opacity-50"
+                                    )}
+                                    onClick={() => isCherryPick && !isInExisting && toggleCherryPickItem(conflict.imported.name, 'takeaways', item)}
+                                  >
+                                    {isCherryPick && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        disabled={isInExisting}
+                                        onChange={() => {}}
+                                        className="mt-0.5 rounded border-muted-foreground"
+                                      />
+                                    )}
+                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>
+                                      {isCherryPick ? '' : '✓ '}{item}
+                                      {isCherryPick && isInExisting && <span className="text-muted-foreground ml-1">(duplicate)</span>}
+                                    </span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                           <div>
                             <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <ArrowRight className="w-3 h-3" /> Actions ({conflict.imported.content.actionItems.length})
                             </p>
-                            <ul className="space-y-0.5 text-foreground max-h-20 overflow-y-auto">
-                              {conflict.imported.content.actionItems.slice(0, 5).map((item, i) => (
-                                <li key={i} className="truncate">☐ {item}</li>
-                              ))}
-                              {conflict.imported.content.actionItems.length > 5 && (
-                                <li className="text-muted-foreground">+{conflict.imported.content.actionItems.length - 5} more</li>
-                              )}
+                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                              {conflict.imported.content.actionItems.map((item, i) => {
+                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.actions.has(item);
+                                const isInExisting = conflict.existing.content.actionItems.includes(item);
+                                return (
+                                  <li 
+                                    key={i} 
+                                    className={cn(
+                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
+                                      isCherryPick && !isInExisting && "cursor-pointer hover:bg-muted/50",
+                                      isCherryPick && isSelected && "bg-primary/10",
+                                      isCherryPick && isInExisting && "opacity-50"
+                                    )}
+                                    onClick={() => isCherryPick && !isInExisting && toggleCherryPickItem(conflict.imported.name, 'actions', item)}
+                                  >
+                                    {isCherryPick && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        disabled={isInExisting}
+                                        onChange={() => {}}
+                                        className="mt-0.5 rounded border-muted-foreground"
+                                      />
+                                    )}
+                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>
+                                      {isCherryPick ? '' : '☐ '}{item}
+                                      {isCherryPick && isInExisting && <span className="text-muted-foreground ml-1">(duplicate)</span>}
+                                    </span>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         </div>
                       </div>
                     </div>
+                    
+                    {/* Cherry-pick summary */}
+                    {conflictResolutions[conflict.imported.name] === 'cherry_pick' && cherryPickSelections[conflict.imported.name] && (
+                      <div className="px-3 py-2 bg-muted/30 border-t text-xs text-muted-foreground">
+                        <span className="font-medium">Merged result: </span>
+                        {cherryPickSelections[conflict.imported.name].insights.size} insights, {' '}
+                        {cherryPickSelections[conflict.imported.name].takeaways.size} takeaways, {' '}
+                        {cherryPickSelections[conflict.imported.name].actions.size} actions
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

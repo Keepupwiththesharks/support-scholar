@@ -279,11 +279,20 @@ export const useContentPresets = () => {
   // Apply import with conflict resolution
   const applyImport = useCallback((
     newPresets: ContentPreset[],
-    conflictResolutions: { presetName: string; action: 'overwrite' | 'keep_both' | 'skip' }[],
+    conflictResolutions: { 
+      presetName: string; 
+      action: 'overwrite' | 'keep_both' | 'skip' | 'cherry_pick';
+      cherryPickedContent?: {
+        insights: string[];
+        keyTakeaways: string[];
+        actionItems: string[];
+      };
+    }[],
     conflicts: { imported: ContentPreset; existing: ContentPreset }[]
-  ): { imported: number; overwritten: number; skipped: number } => {
+  ): { imported: number; overwritten: number; merged: number; skipped: number } => {
     let imported = newPresets.length;
     let overwritten = 0;
+    let merged = 0;
     let skipped = 0;
     
     let updatedPresets = [...presets];
@@ -306,6 +315,23 @@ export const useContentPresets = () => {
         };
         presetsToAdd.push(renamedPreset);
         imported++;
+      } else if (action === 'cherry_pick' && resolution?.cherryPickedContent) {
+        // Merge selected items into existing preset
+        const existingIndex = updatedPresets.findIndex(p => p.id === conflict.existing.id);
+        if (existingIndex !== -1) {
+          const mergedPreset: ContentPreset = {
+            ...updatedPresets[existingIndex],
+            content: {
+              ...updatedPresets[existingIndex].content,
+              insights: resolution.cherryPickedContent.insights,
+              keyTakeaways: resolution.cherryPickedContent.keyTakeaways,
+              actionItems: resolution.cherryPickedContent.actionItems,
+            },
+            updatedAt: new Date(),
+          };
+          updatedPresets[existingIndex] = mergedPreset;
+          merged++;
+        }
       } else {
         skipped++;
       }
@@ -315,7 +341,7 @@ export const useContentPresets = () => {
     setPresets(finalPresets);
     saveToStorage(finalPresets);
     
-    return { imported, overwritten, skipped };
+    return { imported, overwritten, merged, skipped };
   }, [presets, saveToStorage]);
 
   return {
