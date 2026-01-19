@@ -23,7 +23,11 @@ const Index = () => {
     pauseRecording,
     resumeRecording,
     stopRecording,
-    addNote,
+    captureTab,
+    captureCode,
+    captureNote,
+    captureMeeting,
+    captureFromClipboard,
   } = useRecording();
 
   const {
@@ -75,7 +79,11 @@ const Index = () => {
                 onPause={pauseRecording}
                 onResume={resumeRecording}
                 onStop={stopRecording}
-                onAddNote={addNote}
+                onCaptureTab={captureTab}
+                onCaptureCode={captureCode}
+                onCaptureNote={captureNote}
+                onCaptureMeeting={captureMeeting}
+                onCaptureClipboard={async () => { await captureFromClipboard(); }}
               />
             </div>
 

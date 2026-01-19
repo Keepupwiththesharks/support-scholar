@@ -1,17 +1,26 @@
-import { Play, Pause, Square, Clock, MessageSquarePlus } from 'lucide-react';
+import { Play, Pause, Square, Clock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RecordingStatus } from '@/types';
 import { useState } from 'react';
+import { QuickCaptureButtons } from './QuickCaptureButtons';
+import { ActivityCaptureModal } from './ActivityCaptureModal';
+import { CaptureTabInput, CaptureCodeInput, CaptureNoteInput, CaptureMeetingInput } from '@/hooks/useRecording';
+
+type CaptureType = 'tab' | 'code' | 'note' | 'meeting';
 
 interface RecordingControlsProps {
   status: RecordingStatus;
   elapsedTime: number;
-  onStart: (ticketId?: string) => void;
+  onStart: (sessionName?: string) => void;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
-  onAddNote: (note: string) => void;
+  onCaptureTab: (input: CaptureTabInput) => Promise<void>;
+  onCaptureCode: (input: CaptureCodeInput) => void;
+  onCaptureNote: (input: CaptureNoteInput) => void;
+  onCaptureMeeting: (input: CaptureMeetingInput) => void;
+  onCaptureClipboard: () => Promise<void>;
 }
 
 const formatTime = (seconds: number): string => {
@@ -28,25 +37,26 @@ export const RecordingControls = ({
   onPause,
   onResume,
   onStop,
-  onAddNote,
+  onCaptureTab,
+  onCaptureCode,
+  onCaptureNote,
+  onCaptureMeeting,
+  onCaptureClipboard,
 }: RecordingControlsProps) => {
-  const [ticketId, setTicketId] = useState('');
-  const [noteText, setNoteText] = useState('');
-  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [sessionName, setSessionName] = useState('');
+  const [showCaptureModal, setShowCaptureModal] = useState(false);
+  const [captureType, setCaptureType] = useState<CaptureType>('tab');
 
   const handleStart = () => {
-    onStart(ticketId || undefined);
-    setTicketId('');
+    onStart(sessionName || undefined);
+    setSessionName('');
   };
 
   const placeholderText = "Session name (e.g., 'React tutorial', 'Debug login')";
 
-  const handleAddNote = () => {
-    if (noteText.trim()) {
-      onAddNote(noteText);
-      setNoteText('');
-      setShowNoteInput(false);
-    }
+  const openCaptureModal = (type: CaptureType) => {
+    setCaptureType(type);
+    setShowCaptureModal(true);
   };
 
   if (status === 'idle') {
@@ -56,19 +66,19 @@ export const RecordingControls = ({
           <div className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center shadow-glow">
             <Clock className="w-10 h-10 text-primary-foreground" />
           </div>
-          <p className="text-muted-foreground text-sm">Ready to capture</p>
+          <p className="text-muted-foreground text-sm">Ready to capture your workflow</p>
         </div>
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
           <Input
             placeholder={placeholderText}
-            value={ticketId}
-            onChange={(e) => setTicketId(e.target.value)}
+            value={sessionName}
+            onChange={(e) => setSessionName(e.target.value)}
             className="text-center"
           />
           <Button variant="gradient" size="xl" onClick={handleStart} className="w-full">
             <Play className="w-5 h-5" />
-            Start Capture
+            Start Session
           </Button>
         </div>
       </div>
@@ -114,28 +124,28 @@ export const RecordingControls = ({
           <Square className="w-4 h-4" />
           Stop
         </Button>
-
-        <Button 
-          variant="secondary" 
-          size="icon-lg" 
-          onClick={() => setShowNoteInput(!showNoteInput)}
-        >
-          <MessageSquarePlus className="w-5 h-5" />
-        </Button>
       </div>
 
-      {showNoteInput && (
-        <div className="flex gap-2 w-full max-w-md animate-slide-up">
-          <Input
-            placeholder="Add a note..."
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
-            autoFocus
-          />
-          <Button onClick={handleAddNote}>Add</Button>
-        </div>
-      )}
+      {/* Quick Capture Buttons */}
+      <QuickCaptureButtons
+        onCaptureTab={() => openCaptureModal('tab')}
+        onCaptureCode={() => openCaptureModal('code')}
+        onCaptureNote={() => openCaptureModal('note')}
+        onCaptureMeeting={() => openCaptureModal('meeting')}
+        onCaptureClipboard={onCaptureClipboard}
+        disabled={status === 'paused'}
+      />
+
+      {/* Capture Modal */}
+      <ActivityCaptureModal
+        open={showCaptureModal}
+        onClose={() => setShowCaptureModal(false)}
+        defaultType={captureType}
+        onCaptureTab={onCaptureTab}
+        onCaptureCode={onCaptureCode}
+        onCaptureNote={onCaptureNote}
+        onCaptureMeeting={onCaptureMeeting}
+      />
     </div>
   );
 };
