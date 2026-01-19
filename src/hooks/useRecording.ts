@@ -3,12 +3,14 @@ import { RecordingSession, ActivityEvent, RecordingStatus } from '@/types';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
-// Simulated activity sources for demo
+// Simulated activity sources for demo - universal use cases
 const activitySources = [
-  { type: 'tab' as const, source: 'Chrome', titles: ['Salesforce - Case #12345', 'AWS Console - EC2 Instances', 'Stack Overflow - React Hooks'] },
-  { type: 'app' as const, source: 'Slack', titles: ['#support-team', 'DM with John', '@engineering-alerts'] },
-  { type: 'message' as const, source: 'Slack', titles: ['Discussing server logs', 'Sharing error screenshot', 'Confirming fix deployed'] },
-  { type: 'action' as const, source: 'Terminal', titles: ['kubectl get pods', 'docker logs container', 'ssh production-server'] },
+  { type: 'tab' as const, source: 'Chrome', titles: ['YouTube - Tutorial Video', 'GitHub - Pull Request #234', 'Stack Overflow - Array Methods', 'Wikipedia - Research Topic', 'Google Docs - Project Notes'] },
+  { type: 'app' as const, source: 'VS Code', titles: ['src/components/App.tsx', 'package.json', 'Terminal: npm run dev'] },
+  { type: 'app' as const, source: 'Discord', titles: ['#study-group', 'Voice: Project Meeting', 'DM with teammate'] },
+  { type: 'message' as const, source: 'Slack', titles: ['Sharing solution', 'Asking for help', 'Confirming approach'] },
+  { type: 'action' as const, source: 'Terminal', titles: ['git commit -m "fix bug"', 'npm install', 'python script.py'] },
+  { type: 'tab' as const, source: 'Chrome', titles: ['Notion - Study Notes', 'Figma - Design File', 'ChatGPT - Help Query'] },
 ];
 
 export const useRecording = () => {

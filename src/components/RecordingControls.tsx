@@ -39,6 +39,8 @@ export const RecordingControls = ({
     setTicketId('');
   };
 
+  const placeholderText = "Session name (e.g., 'React tutorial', 'Debug login')";
+
   const handleAddNote = () => {
     if (noteText.trim()) {
       onAddNote(noteText);
@@ -59,14 +61,14 @@ export const RecordingControls = ({
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
           <Input
-            placeholder="Ticket ID (optional)"
+            placeholder={placeholderText}
             value={ticketId}
             onChange={(e) => setTicketId(e.target.value)}
             className="text-center"
           />
           <Button variant="gradient" size="xl" onClick={handleStart} className="w-full">
             <Play className="w-5 h-5" />
-            Start Recording
+            Start Capture
           </Button>
         </div>
       </div>

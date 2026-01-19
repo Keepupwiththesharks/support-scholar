@@ -54,7 +54,7 @@ export const SessionCard = ({ session, onGenerateArticle }: SessionCardProps) =>
           className="shrink-0"
         >
           <FileText className="w-4 h-4" />
-          Generate Article
+          Create Recap
           <ChevronRight className="w-4 h-4" />
         </Button>
       </div>
