@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -308,6 +308,141 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     setContent({ ...content, actionItems: [...content.actionItems, value] });
   };
 
+  // Export as Markdown
+  const exportAsMarkdown = () => {
+    if (!content) return;
+    
+    let markdown = `# ${content.title}\n\n`;
+    markdown += `**Generated:** ${new Date().toLocaleDateString()}\n`;
+    markdown += `**Profile:** ${profileType}\n`;
+    markdown += `**Confidence:** ${content.confidence}%\n\n`;
+    
+    markdown += `## Summary\n\n${content.summary}\n\n`;
+    
+    if (content.insights.length > 0) {
+      markdown += `## Insights\n\n`;
+      content.insights.forEach((insight, i) => {
+        markdown += `${i + 1}. ${insight}\n`;
+      });
+      markdown += '\n';
+    }
+    
+    if (content.keyTakeaways.length > 0) {
+      markdown += `## Key Takeaways\n\n`;
+      content.keyTakeaways.forEach((takeaway) => {
+        markdown += `- ✓ ${takeaway}\n`;
+      });
+      markdown += '\n';
+    }
+    
+    if (content.actionItems.length > 0) {
+      markdown += `## Action Items\n\n`;
+      content.actionItems.forEach((action) => {
+        markdown += `- [ ] ${action}\n`;
+      });
+      markdown += '\n';
+    }
+    
+    if (content.relatedTopics.length > 0) {
+      markdown += `## Related Topics\n\n`;
+      markdown += content.relatedTopics.join(', ') + '\n\n';
+    }
+    
+    if (content.tags.length > 0) {
+      markdown += `## Tags\n\n`;
+      markdown += content.tags.map(tag => `#${tag}`).join(' ') + '\n';
+    }
+    
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${content.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-recap.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export as PDF (using print-to-PDF approach)
+  const exportAsPDF = () => {
+    if (!content) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${content.title}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #1a1a1a; line-height: 1.6; }
+    h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 24px; }
+    h2 { color: #334155; margin-top: 32px; margin-bottom: 16px; font-size: 1.25rem; }
+    .meta { color: #64748b; font-size: 0.875rem; margin-bottom: 24px; }
+    .meta span { margin-right: 16px; }
+    .summary { background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #3b82f6; }
+    ul, ol { padding-left: 24px; }
+    li { margin-bottom: 8px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { background: #e0e7ff; color: #3730a3; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; }
+    .confidence { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .high { background: #dcfce7; color: #166534; }
+    .medium { background: #fef3c7; color: #92400e; }
+    .low { background: #fee2e2; color: #991b1b; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <h1>${content.title}</h1>
+  <div class="meta">
+    <span>📅 ${new Date().toLocaleDateString()}</span>
+    <span>👤 ${profileType}</span>
+    <span class="confidence ${content.confidence > 70 ? 'high' : content.confidence > 40 ? 'medium' : 'low'}">
+      ${content.confidence}% confidence
+    </span>
+  </div>
+  
+  <div class="summary">${content.summary}</div>
+  
+  ${content.insights.length > 0 ? `
+  <h2>💡 Insights</h2>
+  <ol>
+    ${content.insights.map(i => `<li>${i}</li>`).join('')}
+  </ol>` : ''}
+  
+  ${content.keyTakeaways.length > 0 ? `
+  <h2>🎯 Key Takeaways</h2>
+  <ul>
+    ${content.keyTakeaways.map(t => `<li>✓ ${t}</li>`).join('')}
+  </ul>` : ''}
+  
+  ${content.actionItems.length > 0 ? `
+  <h2>➡️ Action Items</h2>
+  <ul>
+    ${content.actionItems.map(a => `<li>☐ ${a}</li>`).join('')}
+  </ul>` : ''}
+  
+  ${content.relatedTopics.length > 0 ? `
+  <h2>📈 Related Topics</h2>
+  <p>${content.relatedTopics.join(', ')}</p>` : ''}
+  
+  ${content.tags.length > 0 ? `
+  <h2>🏷️ Tags</h2>
+  <div class="tags">
+    ${content.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+  </div>` : ''}
+</body>
+</html>`;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   if (!content) {
     return (
       <div className="border rounded-xl p-6 bg-gradient-to-br from-primary/5 to-secondary/20">
@@ -537,15 +672,25 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
         </div>
       )}
 
-      {/* Apply Button */}
-      {onApplyContent && (
-        <div className="p-4 border-t">
+      {/* Export & Apply Buttons */}
+      <div className="p-4 border-t space-y-2">
+        <div className="flex gap-2">
+          <Button onClick={exportAsMarkdown} variant="outline" size="sm" className="flex-1">
+            <FileText className="w-4 h-4 mr-2" />
+            Export Markdown
+          </Button>
+          <Button onClick={exportAsPDF} variant="outline" size="sm" className="flex-1">
+            <Download className="w-4 h-4 mr-2" />
+            Export PDF
+          </Button>
+        </div>
+        {onApplyContent && (
           <Button onClick={() => onApplyContent(content)} className="w-full" variant="outline">
             <Sparkles className="w-4 h-4 mr-2" />
             Apply to Article
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
