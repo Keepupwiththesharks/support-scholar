@@ -235,11 +235,11 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'overwrite' | 'keep_both' | 'skip' | 'cherry_pick'>>({});
   const [expandedConflicts, setExpandedConflicts] = useState<Set<string>>(new Set());
   
-  // Cherry-pick selections: { presetName: { insights: Set<string>, takeaways: Set<string>, actions: Set<string> } }
+  // Cherry-pick selections with ordered arrays for drag-and-drop
   const [cherryPickSelections, setCherryPickSelections] = useState<Record<string, {
-    insights: Set<string>;
-    takeaways: Set<string>;
-    actions: Set<string>;
+    insights: string[];
+    takeaways: string[];
+    actions: string[];
   }>>({});
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
@@ -371,9 +371,9 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           presetName,
           action,
           cherryPickedContent: selections ? {
-            insights: Array.from(selections.insights),
-            keyTakeaways: Array.from(selections.takeaways),
-            actionItems: Array.from(selections.actions),
+            insights: selections.insights,
+            keyTakeaways: selections.takeaways,
+            actionItems: selections.actions,
           } : undefined,
         };
       }
@@ -396,13 +396,13 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     
     // Initialize cherry-pick selections if setting to cherry_pick
     if (action === 'cherry_pick') {
-      const newSelections: Record<string, { insights: Set<string>; takeaways: Set<string>; actions: Set<string> }> = {};
+      const newSelections: Record<string, { insights: string[]; takeaways: string[]; actions: string[] }> = {};
       pendingImport.conflicts.forEach(c => {
         // Start with existing items selected
         newSelections[c.imported.name] = {
-          insights: new Set(c.existing.content.insights),
-          takeaways: new Set(c.existing.content.keyTakeaways),
-          actions: new Set(c.existing.content.actionItems),
+          insights: [...c.existing.content.insights],
+          takeaways: [...c.existing.content.keyTakeaways],
+          actions: [...c.existing.content.actionItems],
         };
       });
       setCherryPickSelections(newSelections);
@@ -429,9 +429,9 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     setCherryPickSelections(prev => ({
       ...prev,
       [presetName]: {
-        insights: new Set(conflict.existing.content.insights),
-        takeaways: new Set(conflict.existing.content.keyTakeaways),
-        actions: new Set(conflict.existing.content.actionItems),
+        insights: [...conflict.existing.content.insights],
+        takeaways: [...conflict.existing.content.keyTakeaways],
+        actions: [...conflict.existing.content.actionItems],
       },
     }));
     setExpandedConflicts(prev => new Set([...prev, presetName]));
@@ -443,16 +443,17 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     item: string
   ) => {
     setCherryPickSelections(prev => {
-      const current = prev[presetName] || { insights: new Set(), takeaways: new Set(), actions: new Set() };
-      const newSet = new Set(current[type]);
-      if (newSet.has(item)) {
-        newSet.delete(item);
+      const current = prev[presetName] || { insights: [], takeaways: [], actions: [] };
+      const currentArray = [...current[type]];
+      const index = currentArray.indexOf(item);
+      if (index > -1) {
+        currentArray.splice(index, 1);
       } else {
-        newSet.add(item);
+        currentArray.push(item);
       }
       return {
         ...prev,
-        [presetName]: { ...current, [type]: newSet },
+        [presetName]: { ...current, [type]: currentArray },
       };
     });
   };
@@ -466,11 +467,31 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     setCherryPickSelections(prev => ({
       ...prev,
       [presetName]: {
-        insights: new Set(content.insights),
-        takeaways: new Set(content.keyTakeaways),
-        actions: new Set(content.actionItems),
+        insights: [...content.insights],
+        takeaways: [...content.keyTakeaways],
+        actions: [...content.actionItems],
       },
     }));
+  };
+
+  // Reorder cherry-picked items
+  const reorderCherryPickItems = (
+    presetName: string,
+    type: 'insights' | 'takeaways' | 'actions',
+    oldIndex: number,
+    newIndex: number
+  ) => {
+    setCherryPickSelections(prev => {
+      const current = prev[presetName];
+      if (!current) return prev;
+      const items = [...current[type]];
+      const [removed] = items.splice(oldIndex, 1);
+      items.splice(newIndex, 0, removed);
+      return {
+        ...prev,
+        [presetName]: { ...current, [type]: items },
+      };
+    });
   };
 
   // Drag end handlers
@@ -1563,7 +1584,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.existing.content.insights.map((item, i) => {
                                 const isCherryPick = resolution === 'cherry_pick';
-                                const isSelected = cherryPickSelections[conflict.imported.name]?.insights.has(item);
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.insights.includes(item);
                                 return (
                                   <li 
                                     key={i} 
@@ -1602,7 +1623,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.existing.content.keyTakeaways.map((item, i) => {
                                 const isCherryPick = resolution === 'cherry_pick';
-                                const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.has(item);
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.includes(item);
                                 return (
                                   <li 
                                     key={i} 
@@ -1641,7 +1662,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.existing.content.actionItems.map((item, i) => {
                                 const isCherryPick = resolution === 'cherry_pick';
-                                const isSelected = cherryPickSelections[conflict.imported.name]?.actions.has(item);
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.actions.includes(item);
                                 return (
                                   <li 
                                     key={i} 
@@ -1693,7 +1714,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.imported.content.insights.map((item, i) => {
                                 const isCherryPick = resolution === 'cherry_pick';
-                                const isSelected = cherryPickSelections[conflict.imported.name]?.insights.has(item);
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.insights.includes(item);
                                 const isInExisting = conflict.existing.content.insights.includes(item);
                                 return (
                                   <li 
@@ -1738,7 +1759,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.imported.content.keyTakeaways.map((item, i) => {
                                 const isCherryPick = resolution === 'cherry_pick';
-                                const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.has(item);
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.includes(item);
                                 const isInExisting = conflict.existing.content.keyTakeaways.includes(item);
                                 return (
                                   <li 
@@ -1785,7 +1806,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.imported.content.actionItems.map((item, i) => {
                                 const isCherryPick = resolution === 'cherry_pick';
-                                const isSelected = cherryPickSelections[conflict.imported.name]?.actions.has(item);
+                                const isSelected = cherryPickSelections[conflict.imported.name]?.actions.includes(item);
                                 const isInExisting = conflict.existing.content.actionItems.includes(item);
                                 return (
                                   <li 
@@ -1824,7 +1845,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                       </div>
                       </motion.div>
                     
-                      {/* Cherry-pick summary */}
+                      {/* Cherry-pick summary with draggable preview */}
                       <AnimatePresence>
                         {resolution === 'cherry_pick' && cherryPickSelections[conflict.imported.name] && (
                           <motion.div 
@@ -1832,36 +1853,145 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
                             transition={{ duration: 0.2 }}
-                            className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-t"
+                            className="border-t bg-gradient-to-b from-purple-500/5 to-transparent"
                           >
-                            <div className="flex items-center justify-between">
+                            {/* Header */}
+                            <div className="px-4 py-3 border-b border-purple-500/10 flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <motion.div 
                                   initial={{ scale: 0 }}
                                   animate={{ scale: 1 }}
                                   transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                  className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center"
+                                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20"
                                 >
-                                  <Check className="w-4 h-4 text-purple-600" />
+                                  <Check className="w-5 h-5 text-white" />
                                 </motion.div>
                                 <div>
-                                  <p className="text-sm font-medium text-purple-600">Merged Result</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {cherryPickSelections[conflict.imported.name].insights.size} insights · {cherryPickSelections[conflict.imported.name].takeaways.size} takeaways · {cherryPickSelections[conflict.imported.name].actions.size} actions
-                                  </p>
+                                <p className="font-semibold text-purple-600">Your Merged Preset</p>
+                                <p className="text-xs text-muted-foreground">Hover over items to remove • Items are numbered by order</p>
                                 </div>
                               </div>
                               <motion.div 
-                                key={cherryPickSelections[conflict.imported.name].insights.size + cherryPickSelections[conflict.imported.name].takeaways.size + cherryPickSelections[conflict.imported.name].actions.size}
-                                initial={{ scale: 1.2 }}
+                                key={cherryPickSelections[conflict.imported.name].insights.length + cherryPickSelections[conflict.imported.name].takeaways.length + cherryPickSelections[conflict.imported.name].actions.length}
+                                initial={{ scale: 1.3 }}
                                 animate={{ scale: 1 }}
-                                className="text-2xl font-bold text-purple-500"
+                                className="flex items-center gap-2"
                               >
-                                {cherryPickSelections[conflict.imported.name].insights.size + 
-                                 cherryPickSelections[conflict.imported.name].takeaways.size + 
-                                 cherryPickSelections[conflict.imported.name].actions.size}
-                                <span className="text-xs font-normal text-muted-foreground ml-1">items</span>
+                                <span className="text-3xl font-bold text-purple-500">
+                                  {cherryPickSelections[conflict.imported.name].insights.length + 
+                                   cherryPickSelections[conflict.imported.name].takeaways.length + 
+                                   cherryPickSelections[conflict.imported.name].actions.length}
+                                </span>
+                                <span className="text-xs text-muted-foreground">total<br/>items</span>
                               </motion.div>
+                            </div>
+                            
+                            {/* Merged items grid */}
+                            <div className="p-4 grid grid-cols-3 gap-4">
+                              {/* Insights */}
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-amber-600">
+                                  <Lightbulb className="w-4 h-4" />
+                                  <span>Insights ({cherryPickSelections[conflict.imported.name].insights.length})</span>
+                                </div>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {cherryPickSelections[conflict.imported.name].insights.map((item, i) => (
+                                    <motion.div
+                                      key={item}
+                                      layout
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      exit={{ opacity: 0, x: 10 }}
+                                      transition={{ delay: i * 0.02 }}
+                                      className="group flex items-start gap-2 p-2 bg-card rounded-lg border text-xs hover:shadow-md transition-shadow"
+                                    >
+                                      <span className="w-5 h-5 rounded bg-amber-500/20 text-amber-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                        {i + 1}
+                                      </span>
+                                      <span className="flex-1 line-clamp-2">{item}</span>
+                                      <button 
+                                        onClick={() => toggleCherryPickItem(conflict.imported.name, 'insights', item)}
+                                        className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-opacity"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </motion.div>
+                                  ))}
+                                  {cherryPickSelections[conflict.imported.name].insights.length === 0 && (
+                                    <p className="text-xs text-muted-foreground italic py-2">No insights selected</p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Takeaways */}
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-blue-600">
+                                  <Target className="w-4 h-4" />
+                                  <span>Takeaways ({cherryPickSelections[conflict.imported.name].takeaways.length})</span>
+                                </div>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {cherryPickSelections[conflict.imported.name].takeaways.map((item, i) => (
+                                    <motion.div
+                                      key={item}
+                                      layout
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      exit={{ opacity: 0, x: 10 }}
+                                      transition={{ delay: i * 0.02 }}
+                                      className="group flex items-start gap-2 p-2 bg-card rounded-lg border text-xs hover:shadow-md transition-shadow"
+                                    >
+                                      <span className="w-5 h-5 rounded bg-blue-500/20 text-blue-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                        {i + 1}
+                                      </span>
+                                      <span className="flex-1 line-clamp-2">{item}</span>
+                                      <button 
+                                        onClick={() => toggleCherryPickItem(conflict.imported.name, 'takeaways', item)}
+                                        className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-opacity"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </motion.div>
+                                  ))}
+                                  {cherryPickSelections[conflict.imported.name].takeaways.length === 0 && (
+                                    <p className="text-xs text-muted-foreground italic py-2">No takeaways selected</p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Actions */}
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
+                                  <ArrowRight className="w-4 h-4" />
+                                  <span>Actions ({cherryPickSelections[conflict.imported.name].actions.length})</span>
+                                </div>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {cherryPickSelections[conflict.imported.name].actions.map((item, i) => (
+                                    <motion.div
+                                      key={item}
+                                      layout
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      exit={{ opacity: 0, x: 10 }}
+                                      transition={{ delay: i * 0.02 }}
+                                      className="group flex items-start gap-2 p-2 bg-card rounded-lg border text-xs hover:shadow-md transition-shadow"
+                                    >
+                                      <span className="w-5 h-5 rounded bg-emerald-500/20 text-emerald-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                        {i + 1}
+                                      </span>
+                                      <span className="flex-1 line-clamp-2">{item}</span>
+                                      <button 
+                                        onClick={() => toggleCherryPickItem(conflict.imported.name, 'actions', item)}
+                                        className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-opacity"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </motion.div>
+                                  ))}
+                                  {cherryPickSelections[conflict.imported.name].actions.length === 0 && (
+                                    <p className="text-xs text-muted-foreground italic py-2">No actions selected</p>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </motion.div>
                         )}
