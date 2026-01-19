@@ -73,6 +73,7 @@ const Index = () => {
   // Parallax transforms for background elements
   const bgY1 = useTransform(scrollYProgress, [0, 1], [0, 150]);
   const bgY2 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+  const bgY3 = useTransform(scrollYProgress, [0, 1], [0, 200]);
   const bgScale = useTransform(scrollYProgress, [0, 1], [1, 1.2]);
   const bgOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
   
@@ -453,7 +454,7 @@ const Index = () => {
         />
         <motion.div 
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-violet-200/10 to-purple-200/10 dark:from-violet-800/5 dark:to-purple-800/5 rounded-full blur-3xl"
-          style={{ y: useTransform(scrollYProgress, [0, 1], [0, 200]), opacity: bgOpacity }}
+          style={{ y: bgY3, opacity: bgOpacity }}
         />
       </div>
 
