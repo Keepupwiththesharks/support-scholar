@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CustomProfile, useCustomProfiles, AVAILABLE_TEMPLATES, PROFILE_ICONS } from '@/hooks/useCustomProfiles';
+import { useState, useMemo } from 'react';
+import { CustomProfile, useCustomProfiles, AVAILABLE_TEMPLATES, PROFILE_ICONS, PROFILE_TEMPLATES, ProfileTemplate } from '@/hooks/useCustomProfiles';
 import { RecordingPreferences, DEFAULT_PROFILES, UserProfileType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,10 +81,12 @@ export const CustomProfileManager = ({
     getDefaultProfile,
   } = useCustomProfiles();
 
-  const [activeTab, setActiveTab] = useState<'profiles' | 'create'>('profiles');
+  const [activeTab, setActiveTab] = useState<'profiles' | 'templates' | 'create'>('profiles');
   const [editingProfile, setEditingProfile] = useState<CustomProfile | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importData, setImportData] = useState('');
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // Form state for creating/editing
   const [formName, setFormName] = useState('');
@@ -95,6 +97,47 @@ export const CustomProfileManager = ({
     DEFAULT_PROFILES.developer.preferences
   );
   const [formTemplates, setFormTemplates] = useState<string[]>(['simple', 'detailed']);
+
+  // Get unique categories from templates
+  const templateCategories = useMemo(() => {
+    const cats = [...new Set(PROFILE_TEMPLATES.map(t => t.category))];
+    return ['all', ...cats];
+  }, []);
+
+  // Filter templates based on search and category
+  const filteredTemplates = useMemo(() => {
+    return PROFILE_TEMPLATES.filter(t => {
+      const matchesSearch = templateSearch === '' || 
+        t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+        t.description.toLowerCase().includes(templateSearch.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || t.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [templateSearch, selectedCategory]);
+
+  // Group filtered templates by category
+  const templatesByCategory = useMemo(() => {
+    return filteredTemplates.reduce((acc, template) => {
+      if (!acc[template.category]) {
+        acc[template.category] = [];
+      }
+      acc[template.category].push(template);
+      return acc;
+    }, {} as Record<string, ProfileTemplate[]>);
+  }, [filteredTemplates]);
+
+  const handleAddFromTemplate = (template: ProfileTemplate) => {
+    const basePrefs = DEFAULT_PROFILES[template.basedOn].preferences;
+    createProfile(
+      template.name,
+      template.icon,
+      template.description,
+      template.basedOn,
+      { ...basePrefs, ...template.preferences },
+      template.outputTemplates
+    );
+    toast.success(`Added "${template.name}" profile`);
+  };
 
   const resetForm = () => {
     setFormName('');
@@ -209,7 +252,7 @@ export const CustomProfileManager = ({
     toast.success('Profile deleted');
   };
 
-  const templatesByCategory = AVAILABLE_TEMPLATES.reduce((acc, template) => {
+  const availableTemplatesByCategory = AVAILABLE_TEMPLATES.reduce((acc, template) => {
     if (!acc[template.category]) {
       acc[template.category] = [];
     }
@@ -227,11 +270,12 @@ export const CustomProfileManager = ({
             </DialogTitle>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profiles' | 'create')} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profiles' | 'templates' | 'create')} className="flex-1 flex flex-col min-h-0">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="profiles">My Profiles ({customProfiles.length})</TabsTrigger>
+              <TabsTrigger value="templates">Browse Templates</TabsTrigger>
               <TabsTrigger value="create">
-                {editingProfile ? 'Edit Profile' : 'Create New'}
+                {editingProfile ? 'Edit' : 'Custom'}
               </TabsTrigger>
             </TabsList>
 
@@ -240,11 +284,16 @@ export const CustomProfileManager = ({
                 {customProfiles.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <p className="text-lg mb-2">No custom profiles yet</p>
-                    <p className="text-sm mb-4">Create your first profile to customize tracking and templates</p>
-                    <Button onClick={() => setActiveTab('create')}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Profile
-                    </Button>
+                    <p className="text-sm mb-4">Browse templates or create your own profile</p>
+                    <div className="flex gap-2 justify-center">
+                      <Button variant="outline" onClick={() => setActiveTab('templates')}>
+                        Browse Templates
+                      </Button>
+                      <Button onClick={() => setActiveTab('create')}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Custom
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -361,6 +410,105 @@ export const CustomProfileManager = ({
                   <Plus className="w-4 h-4 mr-2" />
                   Create Profile
                 </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="templates" className="flex-1 min-h-0 mt-4">
+              <div className="space-y-4">
+                {/* Search and Filter */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search templates..."
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templateCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat} className="capitalize">
+                          {cat === 'all' ? 'All Categories' : cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <ScrollArea className="h-[350px] pr-4">
+                  {filteredTemplates.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <p>No templates match your search</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {Object.entries(templatesByCategory).map(([category, templates]) => (
+                        <div key={category} className="space-y-3">
+                          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                            {category}
+                            <Badge variant="secondary" className="text-xs">{templates.length}</Badge>
+                          </h4>
+                          <div className="grid gap-2">
+                            {templates.map((template) => {
+                              const alreadyAdded = customProfiles.some(p => p.name === template.name);
+                              return (
+                                <div
+                                  key={template.name}
+                                  className={cn(
+                                    "p-3 rounded-lg border bg-card transition-all hover:shadow-sm",
+                                    alreadyAdded && "opacity-60"
+                                  )}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <span className="text-2xl">{template.icon}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <h5 className="font-medium">{template.name}</h5>
+                                        <Badge variant="outline" className="text-xs">
+                                          {template.basedOn}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground mt-0.5">
+                                        {template.description}
+                                      </p>
+                                      <div className="flex flex-wrap gap-1 mt-2">
+                                        {template.outputTemplates.slice(0, 3).map((t) => (
+                                          <Badge key={t} variant="secondary" className="text-xs capitalize">
+                                            {t.replace('-', ' ')}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant={alreadyAdded ? "outline" : "default"}
+                                      onClick={() => !alreadyAdded && handleAddFromTemplate(template)}
+                                      disabled={alreadyAdded}
+                                    >
+                                      {alreadyAdded ? (
+                                        <>
+                                          <Check className="w-4 h-4 mr-1" />
+                                          Added
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Plus className="w-4 h-4 mr-1" />
+                                          Add
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
               </div>
             </TabsContent>
 
@@ -513,7 +661,7 @@ export const CustomProfileManager = ({
                       </span>
                     </div>
                     
-                    {Object.entries(templatesByCategory).map(([category, templates]) => (
+                    {Object.entries(availableTemplatesByCategory).map(([category, templates]) => (
                       <div key={category} className="space-y-2">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wide">
                           {category}
