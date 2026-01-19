@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { UserProfile, UserProfileType, DEFAULT_PROFILES, RecordingPreferences } from '@/types';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -13,7 +12,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Settings2, Check } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Settings2, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProfileSelectorProps {
@@ -57,14 +62,47 @@ export const ProfileSelector = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Profile</h3>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="flex-1 justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <span className="text-lg">{currentProfile.icon}</span>
+                <span>{currentProfile.name}</span>
+              </span>
+              <ChevronDown className="w-4 h-4 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {profileTypes.map((type) => {
+              const profile = DEFAULT_PROFILES[type];
+              const isSelected = selectedProfile === type;
+              
+              return (
+                <DropdownMenuItem
+                  key={type}
+                  onClick={() => onProfileChange(type)}
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer",
+                    isSelected && "bg-accent"
+                  )}
+                >
+                  <span className="text-lg">{profile.icon}</span>
+                  <div className="flex-1">
+                    <span className="font-medium">{profile.name}</span>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 text-primary" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Dialog open={showSettings} onOpenChange={setShowSettings}>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-2">
+            <Button variant="ghost" size="icon">
               <Settings2 className="w-4 h-4" />
-              Settings
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
@@ -155,39 +193,8 @@ export const ProfileSelector = ({
           </DialogContent>
         </Dialog>
       </div>
-
-      <div className="grid grid-cols-5 gap-2">
-        {profileTypes.map((type) => {
-          const profile = DEFAULT_PROFILES[type];
-          const isSelected = selectedProfile === type;
-          
-          return (
-            <button
-              key={type}
-              onClick={() => onProfileChange(type)}
-              className={cn(
-                "relative flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all",
-                "hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-primary/20",
-                isSelected 
-                  ? "border-primary bg-primary/5" 
-                  : "border-transparent bg-muted/30"
-              )}
-            >
-              {isSelected && (
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                  <Check className="w-3 h-3 text-primary-foreground" />
-                </div>
-              )}
-              <span className="text-2xl">{profile.icon}</span>
-              <span className="text-xs font-medium truncate w-full text-center">
-                {profile.name}
-              </span>
-            </button>
-          );
-        })}
-      </div>
       
-      <p className="text-xs text-muted-foreground text-center">
+      <p className="text-xs text-muted-foreground">
         {currentProfile.description}
       </p>
     </div>
