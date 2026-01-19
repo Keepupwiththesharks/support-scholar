@@ -12,6 +12,7 @@ import { useRecording } from '@/hooks/useRecording';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useArticleLibrary } from '@/hooks/useArticleLibrary';
 import { RecordingSession, UserProfileType } from '@/types';
+import { CustomProfile } from '@/hooks/useCustomProfiles';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Clock, History, FileText, Trash2, Sparkles, BookOpen, Zap, Shield, ArrowRight, Play, Users, Star, CheckCircle2 } from 'lucide-react';
@@ -108,6 +109,11 @@ const Index = () => {
   const [selectedSession, setSelectedSession] = useState<RecordingSession | null>(null);
   const [showApp, setShowApp] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [selectedCustomProfileId, setSelectedCustomProfileId] = useState<string | undefined>(undefined);
+  const [activeCustomProfile, setActiveCustomProfile] = useState<CustomProfile | null>(null);
+
+  // Get effective profile type for the recording
+  const effectiveProfileType = activeCustomProfile ? activeCustomProfile.basedOn : profileType;
 
   // Check if user has seen the tour
   useEffect(() => {
@@ -254,6 +260,11 @@ const Index = () => {
                       onProfileChange={changeProfile}
                       customPreferences={customPreferences}
                       onPreferencesChange={updateCustomPreferences}
+                      selectedCustomProfileId={selectedCustomProfileId}
+                      onCustomProfileChange={(id, profile) => {
+                        setSelectedCustomProfileId(id || undefined);
+                        setActiveCustomProfile(profile);
+                      }}
                     />
 
                     <div className="my-6 border-t" />

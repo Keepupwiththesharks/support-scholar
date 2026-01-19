@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { UserProfile, UserProfileType, DEFAULT_PROFILES, RecordingPreferences } from '@/types';
+import { CustomProfile, useCustomProfiles } from '@/hooks/useCustomProfiles';
+import { CustomProfileManager } from '@/components/CustomProfileManager';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -17,8 +19,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { Settings2, Check, ChevronDown } from 'lucide-react';
+import { Settings2, Check, ChevronDown, Plus, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProfileSelectorProps {
@@ -26,21 +30,42 @@ interface ProfileSelectorProps {
   onProfileChange: (profile: UserProfileType) => void;
   customPreferences?: RecordingPreferences;
   onPreferencesChange?: (preferences: RecordingPreferences) => void;
+  selectedCustomProfileId?: string;
+  onCustomProfileChange?: (profileId: string | null, profile: CustomProfile | null) => void;
 }
 
-const profileTypes: UserProfileType[] = ['student', 'developer', 'support', 'researcher', 'custom'];
+const presetProfileTypes: UserProfileType[] = ['student', 'developer', 'support', 'researcher'];
 
 export const ProfileSelector = ({
   selectedProfile,
   onProfileChange,
   customPreferences,
   onPreferencesChange,
+  selectedCustomProfileId,
+  onCustomProfileChange,
 }: ProfileSelectorProps) => {
   const [showSettings, setShowSettings] = useState(false);
-  const currentProfile = DEFAULT_PROFILES[selectedProfile];
-  const preferences = selectedProfile === 'custom' && customPreferences 
-    ? customPreferences 
-    : currentProfile.preferences;
+  const [showCustomManager, setShowCustomManager] = useState(false);
+  const { customProfiles, getProfileById } = useCustomProfiles();
+
+  // Get the active profile (either preset or custom)
+  const activeCustomProfile = selectedCustomProfileId ? getProfileById(selectedCustomProfileId) : null;
+  const currentProfile = activeCustomProfile 
+    ? { 
+        name: activeCustomProfile.name, 
+        icon: activeCustomProfile.icon, 
+        description: activeCustomProfile.description,
+        preferences: activeCustomProfile.preferences,
+        outputTemplates: activeCustomProfile.outputTemplates,
+        type: 'custom' as UserProfileType,
+      }
+    : DEFAULT_PROFILES[selectedProfile];
+  
+  const preferences = activeCustomProfile
+    ? activeCustomProfile.preferences
+    : selectedProfile === 'custom' && customPreferences 
+      ? customPreferences 
+      : currentProfile.preferences;
 
   const handlePreferenceToggle = (key: keyof RecordingPreferences) => {
     if (!onPreferencesChange) return;
@@ -61,6 +86,19 @@ export const ProfileSelector = ({
     });
   };
 
+  const handleSelectPresetProfile = (type: UserProfileType) => {
+    onProfileChange(type);
+    onCustomProfileChange?.(null, null);
+  };
+
+  const handleSelectCustomProfile = (profileId: string) => {
+    const profile = getProfileById(profileId);
+    if (profile) {
+      onProfileChange('custom');
+      onCustomProfileChange?.(profileId, profile);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -70,19 +108,23 @@ export const ProfileSelector = ({
               <span className="flex items-center gap-2">
                 <span className="text-lg">{currentProfile.icon}</span>
                 <span>{currentProfile.name}</span>
+                {activeCustomProfile && (
+                  <Badge variant="secondary" className="text-xs">Custom</Badge>
+                )}
               </span>
               <ChevronDown className="w-4 h-4 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {profileTypes.map((type) => {
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Preset Profiles</DropdownMenuLabel>
+            {presetProfileTypes.map((type) => {
               const profile = DEFAULT_PROFILES[type];
-              const isSelected = selectedProfile === type;
+              const isSelected = selectedProfile === type && !selectedCustomProfileId;
               
               return (
                 <DropdownMenuItem
                   key={type}
-                  onClick={() => onProfileChange(type)}
+                  onClick={() => handleSelectPresetProfile(type)}
                   className={cn(
                     "flex items-center gap-2 cursor-pointer",
                     isSelected && "bg-accent"
@@ -96,6 +138,45 @@ export const ProfileSelector = ({
                 </DropdownMenuItem>
               );
             })}
+
+            {customProfiles.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  My Custom Profiles
+                </DropdownMenuLabel>
+                {customProfiles.map((profile) => {
+                  const isSelected = selectedCustomProfileId === profile.id;
+                  
+                  return (
+                    <DropdownMenuItem
+                      key={profile.id}
+                      onClick={() => handleSelectCustomProfile(profile.id)}
+                      className={cn(
+                        "flex items-center gap-2 cursor-pointer",
+                        isSelected && "bg-accent"
+                      )}
+                    >
+                      <span className="text-lg">{profile.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium truncate block">{profile.name}</span>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-primary" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </>
+            )}
+
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => setShowCustomManager(true)}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Manage Custom Profiles...</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -197,6 +278,16 @@ export const ProfileSelector = ({
       <p className="text-xs text-muted-foreground">
         {currentProfile.description}
       </p>
+
+      <CustomProfileManager
+        open={showCustomManager}
+        onOpenChange={setShowCustomManager}
+        selectedCustomProfileId={selectedCustomProfileId}
+        onSelectProfile={(profileId) => {
+          handleSelectCustomProfile(profileId);
+          setShowCustomManager(false);
+        }}
+      />
     </div>
   );
 };
