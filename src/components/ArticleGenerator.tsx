@@ -15,18 +15,23 @@ const generateArticle = (session: RecordingSession, template: KnowledgeArticle['
   const tabEvents = session.events.filter(e => e.type === 'tab');
   const actionEvents = session.events.filter(e => e.type === 'action');
   const noteEvents = session.events.filter(e => e.type === 'note');
+  const appEvents = session.events.filter(e => e.type === 'app');
+
+  const sessionName = session.ticketId || 'Session';
+  const uniqueSources = [...new Set([...tabEvents, ...appEvents].map(e => e.source))].join(', ') || 'various tools';
 
   return {
     id: Math.random().toString(36).substring(2, 15),
-    title: `Troubleshooting Guide: ${session.ticketId || 'Support Case'}`,
-    summary: `This article documents the resolution process for ${session.ticketId || 'the support case'} captured during a ${Math.floor(session.events.length / 3)} minute session.`,
-    problem: `Customer reported an issue that required investigation across multiple systems including ${[...new Set(tabEvents.map(e => e.source))].join(', ') || 'various platforms'}.`,
-    solution: `The issue was resolved by performing the following diagnostic steps and applying the necessary fixes as documented below.`,
+    title: `${sessionName} - Activity Recap`,
+    summary: `This recap documents ${Math.floor(session.events.length / 2)} minutes of activity across ${uniqueSources}. Perfect for review, documentation, or sharing with others.`,
+    problem: `Session Goal: Capture and document the workflow involving ${uniqueSources}.`,
+    solution: `Here's what was accomplished during this session, with key steps and resources used.`,
     steps: [
-      'Initial triage and case review',
-      ...actionEvents.slice(0, 5).map(e => e.title),
-      ...noteEvents.map(e => e.description),
-      'Verified resolution and closed ticket',
+      'Session started',
+      ...tabEvents.slice(0, 3).map(e => `Visited: ${e.title}`),
+      ...actionEvents.slice(0, 4).map(e => e.title),
+      ...noteEvents.map(e => `Note: ${e.description}`),
+      'Session completed',
     ].filter(Boolean),
     relatedLinks: tabEvents.slice(0, 3).map(e => e.url || '').filter(Boolean),
     tags: ['troubleshooting', 'support', session.ticketId || 'general'].filter(Boolean),
@@ -108,10 +113,10 @@ Generated on ${article.createdAt.toLocaleString()}
         <div className="p-6">
           <Tabs value={template} onValueChange={(v) => setTemplate(v as KnowledgeArticle['template'])}>
             <TabsList className="grid grid-cols-4 mb-6">
-              <TabsTrigger value="salesforce">Salesforce</TabsTrigger>
-              <TabsTrigger value="microsoft">Microsoft</TabsTrigger>
-              <TabsTrigger value="confluence">Confluence</TabsTrigger>
-              <TabsTrigger value="custom">Custom</TabsTrigger>
+              <TabsTrigger value="salesforce">Professional</TabsTrigger>
+              <TabsTrigger value="microsoft">Study Guide</TabsTrigger>
+              <TabsTrigger value="confluence">Dev Docs</TabsTrigger>
+              <TabsTrigger value="custom">Simple</TabsTrigger>
             </TabsList>
 
             <TabsContent value={template} className="mt-0">
@@ -120,7 +125,7 @@ Generated on ${article.createdAt.toLocaleString()}
                   <Sparkles className="w-16 h-16 text-primary mb-4" />
                   <h3 className="text-lg font-medium mb-2">Ready to Generate</h3>
                   <p className="text-muted-foreground text-center mb-6 max-w-md">
-                    AI will analyze {session.events.length} captured events and create a structured knowledge article in {template.charAt(0).toUpperCase() + template.slice(1)} format.
+                    AI will analyze {session.events.length} captured events and create a structured recap you can save, share, or export.
                   </p>
                   <Button 
                     variant="gradient" 
@@ -136,7 +141,7 @@ Generated on ${article.createdAt.toLocaleString()}
                     ) : (
                       <>
                         <Sparkles className="w-5 h-5" />
-                        Generate Article
+                        Generate Recap
                       </>
                     )}
                   </Button>
@@ -151,10 +156,10 @@ Generated on ${article.createdAt.toLocaleString()}
                       <p className="text-foreground">{article.summary}</p>
                     </div>
 
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Problem</h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Overview</h3>
                     <p className="mb-4">{article.problem}</p>
 
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Solution</h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">What Was Done</h3>
                     <p className="mb-4">{article.solution}</p>
 
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Resolution Steps</h3>

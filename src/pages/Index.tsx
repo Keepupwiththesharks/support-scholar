@@ -78,12 +78,12 @@ const Index = () => {
               </TabsList>
 
               <TabsContent value="sessions" className="mt-6">
-                {sessions.length === 0 ? (
+              {sessions.length === 0 ? (
                   <div className="bg-card border rounded-2xl p-12 text-center">
                     <History className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
                     <h3 className="text-lg font-medium mb-2">No Sessions Yet</h3>
                     <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-                      Start a recording session to capture your support workflow and generate knowledge articles.
+                      Start capturing to record your workflow — studying, coding, researching, or anything else.
                     </p>
                   </div>
                 ) : (
@@ -102,9 +102,9 @@ const Index = () => {
               <TabsContent value="articles" className="mt-6">
                 <div className="bg-card border rounded-2xl p-12 text-center">
                   <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
-                  <h3 className="text-lg font-medium mb-2">Generated Articles</h3>
+                  <h3 className="text-lg font-medium mb-2">Your Recaps</h3>
                   <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-                    Knowledge articles you generate from sessions will appear here for easy access and export.
+                    Summaries and notes generated from your sessions will appear here — perfect for study guides, documentation, or sharing.
                   </p>
                 </div>
               </TabsContent>
