@@ -1,15 +1,22 @@
 import { useState } from 'react';
-import { FileText, Copy, Download, Check, X, Sparkles } from 'lucide-react';
+import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RecordingSession, KnowledgeArticle, UserProfileType } from '@/types';
+import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ArticleGeneratorProps {
   session: RecordingSession;
   profileType: UserProfileType;
   onClose: () => void;
+  onSaveArticle?: (article: SavedArticle) => void;
 }
 
 // Profile-specific template configurations
@@ -61,6 +68,75 @@ const PROFILE_TEMPLATES: Record<UserProfileType, { templates: KnowledgeArticle['
   },
 };
 
+// Export format configurations per profile
+const EXPORT_FORMATS: Record<UserProfileType, { formats: string[]; labels: Record<string, string>; icons: Record<string, React.ReactNode> }> = {
+  support: {
+    formats: ['json', 'markdown', 'html'],
+    labels: {
+      json: 'Salesforce Import (JSON)',
+      markdown: 'Confluence (Markdown)',
+      html: 'Web Format (HTML)',
+    },
+    icons: {
+      json: <FileJson className="w-4 h-4" />,
+      markdown: <FileCode className="w-4 h-4" />,
+      html: <FileType className="w-4 h-4" />,
+    },
+  },
+  student: {
+    formats: ['pdf', 'markdown', 'anki'],
+    labels: {
+      pdf: 'Study Guide (PDF)',
+      markdown: 'Notes (Markdown)',
+      anki: 'Flashcards (Anki)',
+    },
+    icons: {
+      pdf: <FileType className="w-4 h-4" />,
+      markdown: <FileCode className="w-4 h-4" />,
+      anki: <FileJson className="w-4 h-4" />,
+    },
+  },
+  developer: {
+    formats: ['markdown', 'json', 'html'],
+    labels: {
+      markdown: 'README/Docs (Markdown)',
+      json: 'Structured Data (JSON)',
+      html: 'Web Docs (HTML)',
+    },
+    icons: {
+      markdown: <FileCode className="w-4 h-4" />,
+      json: <FileJson className="w-4 h-4" />,
+      html: <FileType className="w-4 h-4" />,
+    },
+  },
+  researcher: {
+    formats: ['pdf', 'bibtex', 'markdown'],
+    labels: {
+      pdf: 'Research Paper (PDF)',
+      bibtex: 'Bibliography (BibTeX)',
+      markdown: 'Notes (Markdown)',
+    },
+    icons: {
+      pdf: <FileType className="w-4 h-4" />,
+      bibtex: <FileCode className="w-4 h-4" />,
+      markdown: <FileCode className="w-4 h-4" />,
+    },
+  },
+  custom: {
+    formats: ['markdown', 'json', 'txt'],
+    labels: {
+      markdown: 'Markdown',
+      json: 'JSON',
+      txt: 'Plain Text',
+    },
+    icons: {
+      markdown: <FileCode className="w-4 h-4" />,
+      json: <FileJson className="w-4 h-4" />,
+      txt: <FileType className="w-4 h-4" />,
+    },
+  },
+};
+
 // Template-specific content structure interfaces
 interface TemplateContent {
   sections: { label: string; content: string | string[] }[];
@@ -76,6 +152,22 @@ const generateTemplateContent = (
   const actionEvents = session.events.filter(e => e.type === 'action');
   const noteEvents = session.events.filter(e => e.type === 'note');
   const appEvents = session.events.filter(e => e.type === 'app');
+  
+  // Extract rich content from events
+  const codeSnippets = session.events
+    .filter(e => e.content?.code)
+    .map(e => e.content!.code!)
+    .slice(0, 3);
+  
+  const textContent = session.events
+    .filter(e => e.content?.text)
+    .map(e => e.content!.text!)
+    .slice(0, 5);
+  
+  const highlights = session.events
+    .flatMap(e => e.content?.highlights || [])
+    .slice(0, 5);
+
   const uniqueSources = [...new Set([...tabEvents, ...appEvents].map(e => e.source))].join(', ') || 'various tools';
   const duration = Math.floor(session.events.length / 2);
 
@@ -87,11 +179,13 @@ const generateTemplateContent = (
           sections: [
             { label: 'Case Number', content: session.ticketId || `CASE-${Date.now().toString().slice(-6)}` },
             { label: 'Environment', content: `Platform: Web Application | Tools: ${uniqueSources}` },
-            { label: 'Customer Impact', content: 'Customer unable to proceed with workflow' },
-            { label: 'Root Cause', content: actionEvents[0]?.description || 'Issue identified during troubleshooting session' },
-            { label: 'Resolution Steps', content: actionEvents.slice(0, 5).map(e => e.title) },
+            { label: 'Customer Impact', content: textContent[0] || 'Customer unable to proceed with workflow' },
+            { label: 'Root Cause', content: textContent[1] || actionEvents[0]?.description || 'Issue identified during troubleshooting session' },
+            { label: 'Resolution Steps', content: actionEvents.slice(0, 5).map(e => e.content?.text || e.title) },
+            { label: 'Technical Details', content: codeSnippets.length > 0 ? codeSnippets : ['No code changes required'] },
             { label: 'Verification', content: 'Issue resolved and verified with customer' },
             { label: 'Time to Resolution', content: `${duration} minutes` },
+            { label: 'Key Observations', content: highlights.length > 0 ? highlights : ['Standard troubleshooting completed'] },
             { label: 'Knowledge Tags', content: session.tags.join(', ') || 'support, troubleshooting' },
           ],
         };
@@ -100,9 +194,10 @@ const generateTemplateContent = (
           sections: [
             { label: 'Article Title', content: `Troubleshooting: ${session.name}` },
             { label: 'Applies To', content: uniqueSources },
-            { label: 'Symptoms', content: 'User reports issue with application functionality' },
-            { label: 'Cause', content: actionEvents[0]?.description || 'Configuration or user error' },
-            { label: 'Resolution', content: actionEvents.slice(0, 4).map(e => e.title) },
+            { label: 'Symptoms', content: textContent[0] || 'User reports issue with application functionality' },
+            { label: 'Cause', content: textContent[1] || actionEvents[0]?.description || 'Configuration or user error' },
+            { label: 'Resolution', content: actionEvents.slice(0, 4).map(e => e.content?.text || e.title) },
+            { label: 'Technical Notes', content: codeSnippets.length > 0 ? codeSnippets : ['No code modifications needed'] },
             { label: 'More Information', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
             { label: 'Keywords', content: session.tags.join(', ') },
           ],
@@ -112,8 +207,10 @@ const generateTemplateContent = (
           sections: [
             { label: 'Overview', content: `Technical documentation for ${session.name}` },
             { label: 'Prerequisites', content: `Access to: ${uniqueSources}` },
-            { label: 'Procedure', content: actionEvents.map(e => e.title) },
+            { label: 'Procedure', content: actionEvents.map(e => e.content?.text || e.title) },
+            { label: 'Code References', content: codeSnippets.length > 0 ? codeSnippets : ['No code snippets captured'] },
             { label: 'Troubleshooting Tips', content: noteEvents.map(e => e.description) },
+            { label: 'Key Points', content: highlights.length > 0 ? highlights : textContent.slice(0, 3) },
             { label: 'Related Pages', content: tabEvents.slice(0, 3).map(e => e.title) },
           ],
         };
@@ -122,7 +219,8 @@ const generateTemplateContent = (
           sections: [
             { label: 'Ticket Summary', content: session.name },
             { label: 'Duration', content: `${duration} minutes` },
-            { label: 'Actions Taken', content: actionEvents.slice(0, 5).map(e => e.title) },
+            { label: 'Issue Description', content: textContent[0] || 'Support case handled' },
+            { label: 'Actions Taken', content: actionEvents.slice(0, 5).map(e => e.content?.text || e.title) },
             { label: 'Outcome', content: 'Issue resolved successfully' },
             { label: 'Notes', content: noteEvents.map(e => e.description) },
           ],
@@ -137,9 +235,11 @@ const generateTemplateContent = (
         return {
           sections: [
             { label: 'Topic', content: session.name },
-            { label: 'Key Concepts', content: tabEvents.slice(0, 4).map(e => `• ${e.title}`) },
-            { label: 'Important Definitions', content: actionEvents.slice(0, 3).map(e => e.description || e.title) },
-            { label: 'Examples', content: noteEvents.map(e => e.description) },
+            { label: 'Key Concepts', content: textContent.slice(0, 4).map(t => `• ${t}`) },
+            { label: 'Important Definitions', content: actionEvents.slice(0, 3).map(e => e.content?.text || e.description || e.title) },
+            { label: 'Code Examples', content: codeSnippets.length > 0 ? codeSnippets : ['No code examples captured'] },
+            { label: 'Examples & Applications', content: noteEvents.map(e => e.description) },
+            { label: 'Key Highlights', content: highlights.length > 0 ? highlights : ['Review main concepts'] },
             { label: 'Study Tips', content: ['Review key concepts daily', 'Practice with examples', 'Create flashcards for definitions'] },
             { label: 'Resources', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
           ],
@@ -149,8 +249,10 @@ const generateTemplateContent = (
           sections: [
             { label: 'Lecture Title', content: session.name },
             { label: 'Date', content: new Date().toLocaleDateString() },
-            { label: 'Main Points', content: tabEvents.slice(0, 5).map(e => e.title) },
-            { label: 'Detailed Notes', content: actionEvents.map(e => e.description || e.title) },
+            { label: 'Main Points', content: textContent.slice(0, 5) },
+            { label: 'Detailed Notes', content: actionEvents.map(e => e.content?.text || e.description || e.title) },
+            { label: 'Code/Formulas', content: codeSnippets.length > 0 ? codeSnippets : ['No code or formulas recorded'] },
+            { label: 'Key Takeaways', content: highlights.length > 0 ? highlights : tabEvents.slice(0, 3).map(e => e.title) },
             { label: 'Questions to Review', content: noteEvents.map(e => `Q: ${e.description}`) },
             { label: 'Next Steps', content: ['Review notes before next class', 'Complete assigned readings'] },
           ],
@@ -159,8 +261,9 @@ const generateTemplateContent = (
         return {
           sections: [
             { label: 'Deck Name', content: session.name },
-            { label: 'Cards', content: tabEvents.slice(0, 6).map((e, i) => `Card ${i + 1}: ${e.title}`) },
-            { label: 'Key Terms', content: actionEvents.slice(0, 4).map(e => `Term: ${e.title}`) },
+            { label: 'Concept Cards', content: textContent.slice(0, 6).map((t, i) => `Card ${i + 1}: ${t}`) },
+            { label: 'Key Terms', content: actionEvents.slice(0, 4).map(e => `Term: ${e.content?.text || e.title}`) },
+            { label: 'Code Snippets', content: codeSnippets.length > 0 ? codeSnippets.map((c, i) => `Snippet ${i + 1}:\n${c}`) : ['No code to memorize'] },
             { label: 'Practice Questions', content: [
               'What is the main concept discussed?',
               'How does this relate to previous topics?',
@@ -172,8 +275,8 @@ const generateTemplateContent = (
         return {
           sections: [
             { label: 'Session Summary', content: session.name },
-            { label: 'Topics Covered', content: tabEvents.slice(0, 4).map(e => e.title) },
-            { label: 'Key Takeaways', content: actionEvents.slice(0, 3).map(e => e.title) },
+            { label: 'Topics Covered', content: textContent.slice(0, 4) },
+            { label: 'Key Takeaways', content: highlights.length > 0 ? highlights : actionEvents.slice(0, 3).map(e => e.title) },
             { label: 'Duration', content: `${duration} minutes of study` },
           ],
         };
@@ -187,11 +290,13 @@ const generateTemplateContent = (
         return {
           sections: [
             { label: 'Feature/Module', content: session.name },
-            { label: 'Overview', content: `Development session covering ${uniqueSources}` },
+            { label: 'Overview', content: textContent[0] || `Development session covering ${uniqueSources}` },
             { label: 'Architecture', content: 'Component-based architecture with separation of concerns' },
-            { label: 'Implementation Details', content: actionEvents.map(e => e.title) },
+            { label: 'Implementation Details', content: actionEvents.map(e => e.content?.text || e.title) },
+            { label: 'Code Snippets', content: codeSnippets.length > 0 ? codeSnippets : ['No code captured'] },
             { label: 'Code References', content: tabEvents.filter(e => e.source === 'VS Code' || e.source === 'GitHub').map(e => e.title) },
             { label: 'Dependencies', content: ['React', 'TypeScript', 'Tailwind CSS'] },
+            { label: 'Key Decisions', content: highlights.length > 0 ? highlights : ['Standard implementation approach'] },
             { label: 'Testing Notes', content: noteEvents.map(e => e.description) },
           ],
         };
@@ -199,9 +304,10 @@ const generateTemplateContent = (
         return {
           sections: [
             { label: 'Project Name', content: session.name },
-            { label: 'Description', content: `Documentation generated from ${duration} minute development session` },
+            { label: 'Description', content: textContent[0] || `Documentation generated from ${duration} minute development session` },
             { label: 'Installation', content: ['npm install', 'npm run dev'] },
-            { label: 'Usage', content: actionEvents.slice(0, 3).map(e => e.title) },
+            { label: 'Usage', content: actionEvents.slice(0, 3).map(e => e.content?.text || e.title) },
+            { label: 'Code Examples', content: codeSnippets.length > 0 ? codeSnippets : ['See source files'] },
             { label: 'Configuration', content: 'See .env.example for environment variables' },
             { label: 'Contributing', content: 'Submit PRs with clear descriptions and tests' },
           ],
@@ -211,7 +317,8 @@ const generateTemplateContent = (
           sections: [
             { label: 'Version', content: `v${new Date().toISOString().slice(0, 10).replace(/-/g, '.')}` },
             { label: 'Date', content: new Date().toLocaleDateString() },
-            { label: 'Changes', content: actionEvents.map(e => `• ${e.title}`) },
+            { label: 'Changes', content: actionEvents.map(e => `• ${e.content?.text || e.title}`) },
+            { label: 'Code Changes', content: codeSnippets.length > 0 ? codeSnippets : ['Minor updates'] },
             { label: 'Files Modified', content: tabEvents.filter(e => e.source === 'VS Code').slice(0, 5).map(e => e.title) },
             { label: 'Notes', content: noteEvents.map(e => e.description) },
           ],
@@ -221,8 +328,9 @@ const generateTemplateContent = (
           sections: [
             { label: 'Debug Session', content: session.name },
             { label: 'Timestamp', content: new Date().toISOString() },
-            { label: 'Issue', content: actionEvents[0]?.description || 'Debugging session' },
-            { label: 'Investigation Steps', content: actionEvents.map(e => e.title) },
+            { label: 'Issue', content: textContent[0] || actionEvents[0]?.description || 'Debugging session' },
+            { label: 'Investigation Steps', content: actionEvents.map(e => e.content?.text || e.title) },
+            { label: 'Code Examined', content: codeSnippets.length > 0 ? codeSnippets : ['See console logs'] },
             { label: 'Console Output', content: noteEvents.map(e => `> ${e.description}`) },
             { label: 'Resolution', content: 'Issue identified and resolved' },
           ],
@@ -237,9 +345,10 @@ const generateTemplateContent = (
         return {
           sections: [
             { label: 'Research Topic', content: session.name },
-            { label: 'Hypothesis', content: 'Initial research question and assumptions' },
+            { label: 'Hypothesis', content: textContent[0] || 'Initial research question and assumptions' },
             { label: 'Sources Reviewed', content: tabEvents.slice(0, 5).map(e => e.title) },
-            { label: 'Key Findings', content: actionEvents.map(e => e.description || e.title) },
+            { label: 'Key Findings', content: textContent.slice(1, 5) },
+            { label: 'Data/Evidence', content: codeSnippets.length > 0 ? codeSnippets : highlights },
             { label: 'Observations', content: noteEvents.map(e => e.description) },
             { label: 'Questions for Further Research', content: ['What are the implications?', 'How does this connect to existing literature?'] },
           ],
@@ -250,7 +359,8 @@ const generateTemplateContent = (
             { label: 'Review Title', content: session.name },
             { label: 'Scope', content: `Analysis of ${tabEvents.length} sources` },
             { label: 'Sources', content: tabEvents.map(e => `• ${e.title}${e.url ? ` (${e.url})` : ''}`) },
-            { label: 'Themes Identified', content: actionEvents.slice(0, 4).map(e => e.title) },
+            { label: 'Key Excerpts', content: textContent.slice(0, 4) },
+            { label: 'Themes Identified', content: highlights.length > 0 ? highlights : actionEvents.slice(0, 4).map(e => e.title) },
             { label: 'Gaps in Literature', content: noteEvents.map(e => e.description) },
             { label: 'Conclusions', content: 'Further research needed in identified areas' },
           ],
@@ -261,8 +371,9 @@ const generateTemplateContent = (
             { label: 'Study', content: session.name },
             { label: 'Methodology', content: `Qualitative analysis of ${uniqueSources}` },
             { label: 'Data Points', content: `${session.events.length} observations recorded` },
-            { label: 'Primary Findings', content: actionEvents.slice(0, 4).map(e => e.title) },
-            { label: 'Supporting Evidence', content: noteEvents.map(e => e.description) },
+            { label: 'Primary Findings', content: textContent.slice(0, 4) },
+            { label: 'Data/Code', content: codeSnippets.length > 0 ? codeSnippets : ['Qualitative data collected'] },
+            { label: 'Supporting Evidence', content: highlights.length > 0 ? highlights : noteEvents.map(e => e.description) },
             { label: 'Implications', content: 'Findings suggest areas for continued investigation' },
           ],
         };
@@ -282,8 +393,9 @@ const generateTemplateContent = (
   return {
     sections: [
       { label: 'Title', content: session.name },
-      { label: 'Summary', content: `${duration} minute session across ${uniqueSources}` },
-      { label: 'Activities', content: actionEvents.map(e => e.title) },
+      { label: 'Summary', content: textContent[0] || `${duration} minute session across ${uniqueSources}` },
+      { label: 'Activities', content: actionEvents.map(e => e.content?.text || e.title) },
+      { label: 'Content Captured', content: codeSnippets.length > 0 ? codeSnippets : textContent.slice(0, 3) },
       { label: 'Resources', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
       { label: 'Notes', content: noteEvents.map(e => e.description) },
     ],
@@ -310,35 +422,16 @@ const generateArticle = (session: RecordingSession, template: KnowledgeArticle['
   };
 };
 
-export const ArticleGenerator = ({ session, profileType, onClose }: ArticleGeneratorProps) => {
-  const profileConfig = PROFILE_TEMPLATES[profileType];
-  const [template, setTemplate] = useState<KnowledgeArticle['template']>(profileConfig.templates[0]);
-  const [article, setArticle] = useState<KnowledgeArticle | null>(null);
-  const [templateContent, setTemplateContent] = useState<TemplateContent | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const { toast } = useToast();
+// Export functions for different formats
+const exportAsMarkdown = (article: KnowledgeArticle, content: TemplateContent): string => {
+  const sectionsMarkdown = content.sections.map(section => {
+    const sectionContent = Array.isArray(section.content) 
+      ? section.content.map(item => `- ${item}`).join('\n')
+      : section.content;
+    return `## ${section.label}\n${sectionContent}`;
+  }).join('\n\n');
 
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-    // Simulate AI processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setArticle(generateArticle(session, template));
-    setTemplateContent(generateTemplateContent(session, template, profileType));
-    setIsGenerating(false);
-  };
-
-  const handleCopy = () => {
-    if (!article || !templateContent) return;
-    
-    const sectionsMarkdown = templateContent.sections.map(section => {
-      const content = Array.isArray(section.content) 
-        ? section.content.map(item => `- ${item}`).join('\n')
-        : section.content;
-      return `## ${section.label}\n${content}`;
-    }).join('\n\n');
-
-    const markdown = `# ${article.title}
+  return `# ${article.title}
 
 ${article.summary}
 
@@ -348,13 +441,193 @@ ${sectionsMarkdown}
 **Tags:** ${article.tags.map(tag => `#${tag}`).join(' ')}
 **Generated on:** ${article.createdAt.toLocaleString()}
 `;
+};
 
+const exportAsJSON = (article: KnowledgeArticle, content: TemplateContent): string => {
+  return JSON.stringify({
+    title: article.title,
+    summary: article.summary,
+    sections: content.sections.reduce((acc, section) => {
+      acc[section.label.toLowerCase().replace(/\s+/g, '_')] = section.content;
+      return acc;
+    }, {} as Record<string, string | string[]>),
+    tags: article.tags,
+    createdAt: article.createdAt.toISOString(),
+    sessionId: article.sessionId,
+  }, null, 2);
+};
+
+const exportAsHTML = (article: KnowledgeArticle, content: TemplateContent): string => {
+  const sectionsHTML = content.sections.map(section => {
+    const sectionContent = Array.isArray(section.content) 
+      ? `<ul>${section.content.map(item => `<li>${item}</li>`).join('')}</ul>`
+      : `<p>${section.content}</p>`;
+    return `<section><h2>${section.label}</h2>${sectionContent}</section>`;
+  }).join('\n');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>${article.title}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; }
+    h1 { color: #1a1a1a; } h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; }
+    .summary { background: #f5f5f5; padding: 1rem; border-radius: 8px; }
+    .tags { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .tag { background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <h1>${article.title}</h1>
+  <div class="summary"><p>${article.summary}</p></div>
+  ${sectionsHTML}
+  <div class="tags">${article.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}</div>
+  <p><small>Generated on ${article.createdAt.toLocaleString()}</small></p>
+</body>
+</html>`;
+};
+
+const exportAsBibTeX = (article: KnowledgeArticle, content: TemplateContent): string => {
+  const sources = content.sections.find(s => s.label === 'Sources')?.content || [];
+  const entries = (Array.isArray(sources) ? sources : [sources]).map((source, i) => {
+    const key = `source${i + 1}_${Date.now()}`;
+    return `@misc{${key},
+  title = {${typeof source === 'string' ? source.split('.')[0] : source}},
+  year = {${new Date().getFullYear()}},
+  note = {Accessed: ${new Date().toLocaleDateString()}}
+}`;
+  });
+  return entries.join('\n\n');
+};
+
+const exportAsAnki = (article: KnowledgeArticle, content: TemplateContent): string => {
+  const cards: { front: string; back: string }[] = [];
+  
+  content.sections.forEach(section => {
+    if (Array.isArray(section.content)) {
+      section.content.forEach((item, i) => {
+        cards.push({
+          front: `${section.label} - Item ${i + 1}`,
+          back: item,
+        });
+      });
+    }
+  });
+
+  return JSON.stringify({ deck: article.title, cards }, null, 2);
+};
+
+const downloadFile = (content: string, filename: string, mimeType: string) => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle }: ArticleGeneratorProps) => {
+  const profileConfig = PROFILE_TEMPLATES[profileType];
+  const exportConfig = EXPORT_FORMATS[profileType];
+  const [template, setTemplate] = useState<KnowledgeArticle['template']>(profileConfig.templates[0]);
+  const [article, setArticle] = useState<KnowledgeArticle | null>(null);
+  const [templateContent, setTemplateContent] = useState<TemplateContent | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const { toast } = useToast();
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setArticle(generateArticle(session, template));
+    setTemplateContent(generateTemplateContent(session, template, profileType));
+    setIsGenerating(false);
+    setSaved(false);
+  };
+
+  const handleCopy = () => {
+    if (!article || !templateContent) return;
+    const markdown = exportAsMarkdown(article, templateContent);
     navigator.clipboard.writeText(markdown);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({
       title: 'Copied to clipboard',
       description: 'Article content copied in Markdown format',
+    });
+  };
+
+  const handleSave = () => {
+    if (!article || !templateContent || !onSaveArticle) return;
+    
+    const savedArticle: SavedArticle = {
+      id: article.id,
+      title: article.title,
+      summary: article.summary,
+      sections: templateContent.sections,
+      tags: article.tags,
+      createdAt: article.createdAt,
+      sessionId: article.sessionId,
+      profileType,
+      templateType: template,
+      templateLabel: profileConfig.labels[template],
+    };
+    
+    onSaveArticle(savedArticle);
+    setSaved(true);
+    toast({
+      title: 'Article saved',
+      description: 'You can find it in the Articles tab',
+    });
+  };
+
+  const handleExport = (format: string) => {
+    if (!article || !templateContent) return;
+
+    const filename = article.title.replace(/\s+/g, '_').toLowerCase();
+    
+    switch (format) {
+      case 'markdown':
+        downloadFile(exportAsMarkdown(article, templateContent), `${filename}.md`, 'text/markdown');
+        break;
+      case 'json':
+        downloadFile(exportAsJSON(article, templateContent), `${filename}.json`, 'application/json');
+        break;
+      case 'html':
+        downloadFile(exportAsHTML(article, templateContent), `${filename}.html`, 'text/html');
+        break;
+      case 'pdf':
+        // For PDF, we'll export as HTML and let the user print to PDF
+        const htmlContent = exportAsHTML(article, templateContent);
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+          printWindow.print();
+        }
+        break;
+      case 'bibtex':
+        downloadFile(exportAsBibTeX(article, templateContent), `${filename}.bib`, 'application/x-bibtex');
+        break;
+      case 'anki':
+        downloadFile(exportAsAnki(article, templateContent), `${filename}_anki.json`, 'application/json');
+        break;
+      case 'txt':
+        const plainText = `${article.title}\n\n${article.summary}\n\n` +
+          templateContent.sections.map(s => 
+            `${s.label}:\n${Array.isArray(s.content) ? s.content.join('\n') : s.content}`
+          ).join('\n\n');
+        downloadFile(plainText, `${filename}.txt`, 'text/plain');
+        break;
+    }
+
+    toast({
+      title: 'Export complete',
+      description: `Article exported as ${exportConfig.labels[format]}`,
     });
   };
 
@@ -377,7 +650,7 @@ ${sectionsMarkdown}
         </div>
 
         <div className="p-6">
-          <Tabs value={template} onValueChange={(v) => setTemplate(v as KnowledgeArticle['template'])}>
+          <Tabs value={template} onValueChange={(v) => { setTemplate(v as KnowledgeArticle['template']); setArticle(null); setSaved(false); }}>
             <TabsList className="grid grid-cols-4 mb-6">
               {profileConfig.templates.map((t) => (
                 <TabsTrigger key={t} value={t}>
@@ -431,14 +704,22 @@ ${sectionsMarkdown}
                           section.content.length > 0 ? (
                             <ul className="list-disc list-inside space-y-1">
                               {section.content.map((item, i) => (
-                                <li key={i} className="text-foreground">{item}</li>
+                                <li key={i} className="text-foreground">
+                                  {item.includes('\n') ? (
+                                    <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto">{item}</pre>
+                                  ) : item}
+                                </li>
                               ))}
                             </ul>
                           ) : (
                             <p className="text-muted-foreground italic">No items recorded</p>
                           )
                         ) : (
-                          <p className="text-foreground">{section.content}</p>
+                          section.content.includes('\n') && section.content.includes('const') ? (
+                            <pre className="p-2 bg-muted rounded text-xs overflow-x-auto">{section.content}</pre>
+                          ) : (
+                            <p className="text-foreground">{section.content}</p>
+                          )
                         )}
                       </div>
                     ))}
@@ -463,14 +744,32 @@ ${sectionsMarkdown}
               Generated from {session.events.length} events
             </p>
             <div className="flex gap-2">
+              {onSaveArticle && (
+                <Button variant="outline" onClick={handleSave} disabled={saved}>
+                  {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  {saved ? 'Saved!' : 'Save'}
+                </Button>
+              )}
               <Button variant="outline" onClick={handleCopy}>
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 {copied ? 'Copied!' : 'Copy'}
               </Button>
-              <Button variant="gradient">
-                <Download className="w-4 h-4" />
-                Export
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="gradient">
+                    <Download className="w-4 h-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {exportConfig.formats.map(format => (
+                    <DropdownMenuItem key={format} onClick={() => handleExport(format)}>
+                      {exportConfig.icons[format]}
+                      <span className="ml-2">{exportConfig.labels[format]}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         )}
