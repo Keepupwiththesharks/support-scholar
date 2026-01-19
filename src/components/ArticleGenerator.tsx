@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType, Brain, Settings2 } from 'lucide-react';
+import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType, Brain, Settings2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle, OutputTemplateType } from '@/types';
@@ -8,9 +8,12 @@ import { useToast } from '@/hooks/use-toast';
 import { ArticleVisuals } from './ArticleVisuals';
 import { SmartContentPanel } from './SmartContentPanel';
 import { TemplateSectionDialog } from './TemplateSectionEditor';
+import { TemplateSelector } from './TemplateSelector';
 import { useTemplateSections } from '@/hooks/useTemplateSections';
+import { useCustomTemplates } from '@/hooks/useCustomTemplates';
 import { GeneratedContent } from '@/lib/contentGenerationEngine';
 import { AVAILABLE_TEMPLATES } from '@/hooks/useCustomProfiles';
+import { CustomTemplate, DEFAULT_TEMPLATES } from '@/types/templates';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -491,6 +494,11 @@ export const ArticleGenerator = ({
   customProfileName,
   customOutputTemplates,
 }: ArticleGeneratorProps) => {
+  const { getAllTemplates, getTemplateById } = useCustomTemplates();
+  
+  // Get all available templates (both default and custom)
+  const allTemplates = getAllTemplates();
+  
   // Determine available templates - use custom templates if provided, otherwise use profile defaults
   const availableTemplates: OutputTemplateType[] = customOutputTemplates && customOutputTemplates.length > 0
     ? (customOutputTemplates.filter(t => TEMPLATE_LABELS[t as OutputTemplateType]) as OutputTemplateType[])
@@ -502,6 +510,10 @@ export const ArticleGenerator = ({
   const exportConfig = EXPORT_FORMATS[profileType];
   const [generationMode, setGenerationMode] = useState<'article' | 'smart'>('article');
   const [template, setTemplate] = useState<OutputTemplateType>(templates[0]);
+  const [selectedCustomTemplate, setSelectedCustomTemplate] = useState<CustomTemplate | null>(
+    DEFAULT_TEMPLATES[0]
+  );
+  const [useCustomTemplateMode, setUseCustomTemplateMode] = useState(false);
   const [article, setArticle] = useState<KnowledgeArticle | null>(null);
   const [templateContent, setTemplateContent] = useState<TemplateContent | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -524,16 +536,88 @@ export const ArticleGenerator = ({
     }
   };
 
+  // Generate content for custom templates
+  const generateCustomTemplateContent = (customTemplate: CustomTemplate): TemplateContent => {
+    const tabEvents = session.events.filter(e => e.type === 'tab');
+    const actionEvents = session.events.filter(e => e.type === 'action');
+    const noteEvents = session.events.filter(e => e.type === 'note');
+    const textContent = session.events.filter(e => e.content?.text).map(e => e.content!.text!).slice(0, 5);
+    const highlights = session.events.flatMap(e => e.content?.highlights || []).slice(0, 5);
+    const codeSnippets = session.events.filter(e => e.content?.code).map(e => e.content!.code!).slice(0, 3);
+    
+    const enabledSections = customTemplate.sections.filter(s => s.enabled);
+    
+    return {
+      sections: enabledSections.map((section, i) => {
+        // Generate appropriate content based on section label
+        const label = section.label.toLowerCase();
+        let content: string | string[] = '';
+        
+        if (label.includes('title') || label.includes('topic') || label.includes('name')) {
+          content = session.name;
+        } else if (label.includes('summary') || label.includes('overview')) {
+          content = textContent[0] || `Session covering ${session.events.length} activities`;
+        } else if (label.includes('key point') || label.includes('highlight') || label.includes('takeaway')) {
+          content = highlights.length > 0 ? highlights : textContent.slice(0, 3);
+        } else if (label.includes('action') || label.includes('task') || label.includes('next step')) {
+          content = actionEvents.slice(0, 5).map(e => e.content?.text || e.title);
+        } else if (label.includes('note') || label.includes('observation')) {
+          content = noteEvents.map(e => e.description);
+        } else if (label.includes('source') || label.includes('resource') || label.includes('reference')) {
+          content = tabEvents.slice(0, 5).map(e => e.url || e.title);
+        } else if (label.includes('code') || label.includes('snippet')) {
+          content = codeSnippets.length > 0 ? codeSnippets : ['No code captured'];
+        } else if (label.includes('date') || label.includes('time')) {
+          content = new Date().toLocaleDateString();
+        } else if (label.includes('detail') || label.includes('description')) {
+          content = actionEvents.map(e => e.content?.text || e.description);
+        } else if (label.includes('finding') || label.includes('result') || label.includes('conclusion')) {
+          content = highlights.length > 0 ? highlights : textContent;
+        } else if (label.includes('question')) {
+          content = ['What are the key learnings?', 'How can this be applied?', 'What needs follow-up?'];
+        } else if (label.includes('participant') || label.includes('attendee')) {
+          content = 'Not specified';
+        } else if (label.includes('decision')) {
+          content = actionEvents.slice(0, 3).map(e => e.content?.text || e.title);
+        } else {
+          // Default: use mixed content
+          content = textContent.length > 0 ? textContent : actionEvents.slice(0, 3).map(e => e.title);
+        }
+        
+        return { label: section.label, content };
+      }),
+    };
+  };
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
-    setArticle(generateArticle(session, template));
     
-    // Get enabled sections from user customizations
-    const enabledSections = getEnabledSections(profileType, template);
-    const enabledLabels = enabledSections.map(s => s.label);
+    if (useCustomTemplateMode && selectedCustomTemplate) {
+      // Use custom template
+      const customContent = generateCustomTemplateContent(selectedCustomTemplate);
+      setArticle({
+        id: Math.random().toString(36).substring(2, 15),
+        title: `${session.name} - ${selectedCustomTemplate.name}`,
+        summary: `Generated using the "${selectedCustomTemplate.name}" template`,
+        problem: '',
+        solution: '',
+        steps: [],
+        relatedLinks: [],
+        tags: session.tags.length > 0 ? session.tags : ['recap'],
+        createdAt: new Date(),
+        sessionId: session.id,
+        template: 'simple', // Fallback for type
+      });
+      setTemplateContent(customContent);
+    } else {
+      // Use built-in template
+      setArticle(generateArticle(session, template));
+      const enabledSections = getEnabledSections(profileType, template);
+      const enabledLabels = enabledSections.map(s => s.label);
+      setTemplateContent(generateTemplateContent(session, template, enabledLabels));
+    }
     
-    setTemplateContent(generateTemplateContent(session, template, enabledLabels));
     setIsGenerating(false);
     setSaved(false);
   };
@@ -672,6 +756,120 @@ export const ArticleGenerator = ({
               onApplyContent={handleApplySmartContent}
             />
           ) : (
+          <>
+            {/* Template Mode Toggle */}
+            <div className="flex items-center justify-between mb-4 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { setUseCustomTemplateMode(false); setArticle(null); setSaved(false); }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                    !useCustomTemplateMode 
+                      ? 'bg-primary/10 text-primary font-medium' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Profile Templates
+                </button>
+                <button
+                  onClick={() => { setUseCustomTemplateMode(true); setArticle(null); setSaved(false); }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                    useCustomTemplateMode 
+                      ? 'bg-primary/10 text-primary font-medium' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Custom Templates
+                </button>
+              </div>
+              {useCustomTemplateMode && selectedCustomTemplate && (
+                <TemplateSelector
+                  selectedTemplateId={selectedCustomTemplate.id}
+                  onSelectTemplate={(t) => {
+                    setSelectedCustomTemplate(t);
+                    setArticle(null);
+                    setSaved(false);
+                  }}
+                />
+              )}
+            </div>
+
+            {useCustomTemplateMode ? (
+              /* Custom Template Mode */
+              <div>
+                {!article ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Sparkles className="w-16 h-16 text-primary mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Ready to Generate</h3>
+                    <p className="text-muted-foreground text-center mb-4 max-w-md">
+                      Using the <strong>{selectedCustomTemplate?.name}</strong> template with {selectedCustomTemplate?.sections.filter(s => s.enabled).length} sections.
+                    </p>
+                    <Button 
+                      variant="gradient" 
+                      size="lg" 
+                      onClick={handleGenerate}
+                      disabled={isGenerating || !selectedCustomTemplate}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <span className="animate-spin">⏳</span>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-5 h-5" />
+                          Generate {selectedCustomTemplate?.name || 'Article'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[500px]">
+                    <div className="prose prose-sm max-w-none">
+                      <h1 className="text-xl font-bold mb-4">{article.title}</h1>
+                      
+                      <div className="bg-secondary/50 rounded-lg p-4 mb-4">
+                        <p className="text-foreground text-sm">{article.summary}</p>
+                      </div>
+
+                      {templateContent?.sections.map((section, index) => (
+                        <div key={index} className="mb-4">
+                          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                            {section.label}
+                          </h3>
+                          {Array.isArray(section.content) ? (
+                            section.content.length > 0 ? (
+                              <ul className="list-disc list-inside space-y-1">
+                                {section.content.map((item, i) => (
+                                  <li key={i} className="text-foreground">
+                                    {item.includes('\n') ? (
+                                      <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto">{item}</pre>
+                                    ) : item}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-muted-foreground italic">No items recorded</p>
+                            )
+                          ) : (
+                            <p className="text-foreground">{section.content}</p>
+                          )}
+                        </div>
+                      ))}
+
+                      <div className="flex gap-2 flex-wrap mt-6 pt-4 border-t">
+                        {article.tags.map(tag => (
+                          <span key={tag} className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+            ) : (
+            /* Profile Template Mode */
           <Tabs value={template} onValueChange={(v) => { setTemplate(v as OutputTemplateType); setArticle(null); setSaved(false); }}>
             <div className="flex items-center justify-between mb-4">
               <TabsList className={`grid grid-cols-${Math.min(templates.length, 4)}`}>
@@ -780,6 +978,8 @@ export const ArticleGenerator = ({
               )}
             </TabsContent>
           </Tabs>
+          )}
+          </>
           )}
         </div>
 
