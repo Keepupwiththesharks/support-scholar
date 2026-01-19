@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { RecordingSession, UserProfileType } from '@/types';
 import { generateSmartContent, GeneratedContent } from '@/lib/contentGenerationEngine';
 import { cn } from '@/lib/utils';
-import { useContentPresets, ContentPreset } from '@/hooks/useContentPresets';
+import { useContentPresets, ContentPreset, PresetCategory, PRESET_CATEGORIES } from '@/hooks/useContentPresets';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -221,14 +221,27 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [activeTab, setActiveTab] = useState<'insights' | 'takeaways' | 'actions'>('insights');
   
   // Preset management
-  const { presets, savePreset, deletePreset, getPresetsByProfile, duplicatePreset } = useContentPresets();
+  const { presets, allTags, savePreset, deletePreset, filterPresets, duplicatePreset } = useContentPresets();
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
+  const [presetCategory, setPresetCategory] = useState<PresetCategory>('general');
+  const [presetTags, setPresetTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState('');
   const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
   
-  const profilePresets = getPresetsByProfile(profileType);
+  // Load dialog filters
+  const [filterCategory, setFilterCategory] = useState<PresetCategory | 'all'>('all');
+  const [filterTag, setFilterTag] = useState<string | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const filteredPresets = filterPresets({
+    profileType,
+    category: filterCategory === 'all' ? undefined : filterCategory,
+    tags: filterTag === 'all' ? undefined : [filterTag],
+    search: searchQuery || undefined,
+  });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -254,10 +267,28 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   // Preset handlers
   const handleSavePreset = () => {
     if (!content || !presetName.trim()) return;
-    savePreset(presetName.trim(), content, profileType, presetDescription.trim() || undefined);
+    savePreset(presetName.trim(), content, profileType, {
+      description: presetDescription.trim() || undefined,
+      category: presetCategory,
+      tags: presetTags,
+    });
     setPresetName('');
     setPresetDescription('');
+    setPresetCategory('general');
+    setPresetTags([]);
     setShowSaveDialog(false);
+  };
+
+  const handleAddTag = () => {
+    const tag = newTag.trim().toLowerCase();
+    if (tag && !presetTags.includes(tag)) {
+      setPresetTags([...presetTags, tag]);
+    }
+    setNewTag('');
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setPresetTags(presetTags.filter(t => t !== tag));
   };
 
   const handleLoadPreset = (preset: ContentPreset) => {
@@ -783,6 +814,78 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
               placeholder="Brief description of this preset"
             />
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Category</label>
+            <div className="flex flex-wrap gap-2">
+              {PRESET_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.value}
+                  onClick={() => setPresetCategory(cat.value)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-sm border transition-colors",
+                    presetCategory === cat.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border hover:bg-muted"
+                  )}
+                >
+                  {cat.icon} {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Tags</label>
+            <div className="flex gap-2">
+              <Input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Add a tag..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={handleAddTag} disabled={!newTag.trim()}>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            {presetTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {presetTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs flex items-center gap-1"
+                  >
+                    #{tag}
+                    <button
+                      onClick={() => handleRemoveTag(tag)}
+                      className="hover:text-destructive"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {allTags.length > 0 && (
+              <div className="mt-2">
+                <p className="text-xs text-muted-foreground mb-1">Existing tags:</p>
+                <div className="flex flex-wrap gap-1">
+                  {allTags.filter(t => !presetTags.includes(t)).slice(0, 10).map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setPresetTags([...presetTags, tag])}
+                      className="px-2 py-0.5 bg-muted rounded-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowSaveDialog(false)}>
@@ -798,23 +901,89 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
 
     {/* Load Preset Dialog */}
     <Dialog open={showLoadDialog} onOpenChange={setShowLoadDialog}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Load Preset</DialogTitle>
           <DialogDescription>
             Select a saved preset to load its content configuration.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4 max-h-80 overflow-y-auto">
-          {presets.length === 0 ? (
+        
+        {/* Filters */}
+        {presets.length > 0 && (
+          <div className="space-y-3 pb-2 border-b">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search presets..."
+                  className="h-9"
+                />
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <Filter className="w-4 h-4 mr-1" />
+                    {filterCategory === 'all' ? 'Category' : PRESET_CATEGORIES.find(c => c.value === filterCategory)?.label}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => setFilterCategory('all')}>
+                    All Categories
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {PRESET_CATEGORIES.map((cat) => (
+                    <DropdownMenuItem key={cat.value} onClick={() => setFilterCategory(cat.value)}>
+                      {cat.icon} {cat.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {allTags.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9">
+                      <Tag className="w-4 h-4 mr-1" />
+                      {filterTag === 'all' ? 'Tag' : `#${filterTag}`}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => setFilterTag('all')}>
+                      All Tags
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {allTags.map((tag) => (
+                      <DropdownMenuItem key={tag} onClick={() => setFilterTag(tag)}>
+                        #{tag}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <div className="py-2 max-h-72 overflow-y-auto">
+          {filteredPresets.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">No presets saved yet.</p>
-              <p className="text-xs">Save your current content to create a preset.</p>
+              {presets.length === 0 ? (
+                <>
+                  <p className="text-sm">No presets saved yet.</p>
+                  <p className="text-xs">Save your current content to create a preset.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm">No presets match your filters.</p>
+                  <p className="text-xs">Try adjusting your search or filters.</p>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
-              {presets.map((preset) => (
+              {filteredPresets.map((preset) => (
                 <div
                   key={preset.id}
                   className={cn(
@@ -827,10 +996,10 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-medium text-sm truncate">{preset.name}</h4>
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {preset.profileType}
+                        <Badge variant="outline" className="text-xs">
+                          {PRESET_CATEGORIES.find(c => c.value === preset.category)?.icon} {PRESET_CATEGORIES.find(c => c.value === preset.category)?.label}
                         </Badge>
                       </div>
                       {preset.description && (
@@ -838,9 +1007,23 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                           {preset.description}
                         </p>
                       )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {preset.content.insights.length} insights • {preset.content.keyTakeaways.length} takeaways • {preset.content.actionItems.length} actions
-                      </p>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="text-xs text-muted-foreground">
+                          {preset.content.insights.length} insights • {preset.content.keyTakeaways.length} takeaways • {preset.content.actionItems.length} actions
+                        </span>
+                        {preset.tags.length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {preset.tags.slice(0, 3).map((tag) => (
+                              <span key={tag} className="px-1.5 py-0.5 bg-muted rounded text-xs text-muted-foreground">
+                                #{tag}
+                              </span>
+                            ))}
+                            {preset.tags.length > 3 && (
+                              <span className="text-xs text-muted-foreground">+{preset.tags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
