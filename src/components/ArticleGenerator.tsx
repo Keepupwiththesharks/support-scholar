@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType, Brain } from 'lucide-react';
+import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType, Brain, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle } from '@/types';
@@ -7,6 +7,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { ArticleVisuals } from './ArticleVisuals';
 import { SmartContentPanel } from './SmartContentPanel';
+import { TemplateSectionDialog } from './TemplateSectionEditor';
+import { useTemplateSections } from '@/hooks/useTemplateSections';
 import { GeneratedContent } from '@/lib/contentGenerationEngine';
 import {
   DropdownMenu,
@@ -145,11 +147,12 @@ interface TemplateContent {
   sections: { label: string; content: string | string[] }[];
 }
 
-// Generate template-specific content based on profile and template type
+// Generate template-specific content based on profile, template type, and custom sections
 const generateTemplateContent = (
   session: RecordingSession, 
   template: KnowledgeArticle['template'],
-  profileType: UserProfileType
+  profileType: UserProfileType,
+  enabledSectionLabels?: string[]
 ): TemplateContent => {
   const tabEvents = session.events.filter(e => e.type === 'tab');
   const actionEvents = session.events.filter(e => e.type === 'action');
@@ -393,7 +396,7 @@ const generateTemplateContent = (
   }
 
   // Custom/Default Templates
-  return {
+  const defaultContent: TemplateContent = {
     sections: [
       { label: 'Title', content: session.name },
       { label: 'Summary', content: textContent[0] || `${duration} minute session across ${uniqueSources}` },
@@ -403,6 +406,17 @@ const generateTemplateContent = (
       { label: 'Notes', content: noteEvents.map(e => e.description) },
     ],
   };
+
+  // Filter sections based on enabled labels if provided
+  if (enabledSectionLabels && enabledSectionLabels.length > 0) {
+    return {
+      sections: defaultContent.sections
+        .filter(s => enabledSectionLabels.includes(s.label))
+        .sort((a, b) => enabledSectionLabels.indexOf(a.label) - enabledSectionLabels.indexOf(b.label)),
+    };
+  }
+
+  return defaultContent;
 };
 
 const generateArticle = (session: RecordingSession, template: KnowledgeArticle['template']): KnowledgeArticle => {
@@ -543,6 +557,7 @@ export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle 
   const [saved, setSaved] = useState(false);
   const [showSmartPanel, setShowSmartPanel] = useState(true);
   const { toast } = useToast();
+  const { getEnabledSections, hasCustomizations } = useTemplateSections();
 
   const handleApplySmartContent = (smartContent: GeneratedContent) => {
     // Enhance the article with smart content
@@ -563,7 +578,12 @@ export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle 
     setIsGenerating(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
     setArticle(generateArticle(session, template));
-    setTemplateContent(generateTemplateContent(session, template, profileType));
+    
+    // Get enabled sections from user customizations
+    const enabledSections = getEnabledSections(profileType, template);
+    const enabledLabels = enabledSections.map(s => s.label);
+    
+    setTemplateContent(generateTemplateContent(session, template, profileType, enabledLabels));
     setIsGenerating(false);
     setSaved(false);
   };
@@ -670,22 +690,36 @@ export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle 
 
         <div className="p-6">
           <Tabs value={template} onValueChange={(v) => { setTemplate(v as KnowledgeArticle['template']); setArticle(null); setSaved(false); }}>
-            <TabsList className="grid grid-cols-4 mb-6">
-              {profileConfig.templates.map((t) => (
-                <TabsTrigger key={t} value={t}>
-                  {profileConfig.labels[t]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="flex items-center justify-between mb-4">
+              <TabsList className="grid grid-cols-4">
+                {profileConfig.templates.map((t) => (
+                  <TabsTrigger key={t} value={t}>
+                    {profileConfig.labels[t]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              
+              <TemplateSectionDialog
+                profileType={profileType}
+                templateKey={template}
+                templateLabel={profileConfig.labels[template]}
+              />
+            </div>
 
             <TabsContent value={template} className="mt-0">
               {!article ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Sparkles className="w-16 h-16 text-primary mb-4" />
                   <h3 className="text-lg font-medium mb-2">Ready to Generate</h3>
-                  <p className="text-muted-foreground text-center mb-6 max-w-md">
+                  <p className="text-muted-foreground text-center mb-4 max-w-md">
                     AI will analyze {session.events.length} captured events and create a structured {profileConfig.labels[template]} you can save, share, or export.
                   </p>
+                  {hasCustomizations(profileType, template) && (
+                    <p className="text-xs text-primary mb-4 flex items-center gap-1">
+                      <Settings2 className="w-3 h-3" />
+                      Using custom section structure
+                    </p>
+                  )}
                   <Button 
                     variant="gradient" 
                     size="lg" 
