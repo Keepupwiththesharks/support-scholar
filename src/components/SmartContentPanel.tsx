@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp, GitMerge, HelpCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -247,6 +247,21 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     takeaways: string[];
     actions: string[];
   }>>({});
+  
+  // Onboarding guide dismissal tracking
+  const [showOnboardingGuide, setShowOnboardingGuide] = useState(true);
+  
+  useEffect(() => {
+    const dismissed = localStorage.getItem('conflict-onboarding-dismissed');
+    if (dismissed === 'true') {
+      setShowOnboardingGuide(false);
+    }
+  }, []);
+  
+  const handleDismissOnboarding = () => {
+    setShowOnboardingGuide(false);
+    localStorage.setItem('conflict-onboarding-dismissed', 'true');
+  };
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetCategory, setPresetCategory] = useState<PresetCategory>('general');
@@ -1373,24 +1388,41 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
             </div>
           </div>
           
-          {/* Onboarding guide - shows first time */}
-          <motion.div 
-            initial={{ height: 'auto', opacity: 1 }}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500/10 via-purple-500/5 to-transparent border-b"
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                <Info className="w-4 h-4 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-blue-600 mb-1">Quick Guide</p>
-                <p className="text-xs text-muted-foreground">
-                  Choose how to handle each conflict: <strong>Overwrite</strong> replaces existing, <strong>Keep Both</strong> creates a copy, 
-                  <strong> Cherry-Pick</strong> lets you select individual items from both versions, or <strong>Skip</strong> to ignore.
-                </p>
-              </div>
-            </div>
-          </motion.div>
+          {/* Onboarding guide - shows for first-time users */}
+          <AnimatePresence>
+            {showOnboardingGuide && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-6 py-3 bg-gradient-to-r from-blue-500/10 via-purple-500/5 to-transparent border-b">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                      <Info className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-blue-600 mb-1">Quick Guide</p>
+                      <p className="text-xs text-muted-foreground">
+                        Choose how to handle each conflict: <strong>Overwrite</strong> replaces existing, <strong>Keep Both</strong> creates a copy, 
+                        <strong> Cherry-Pick</strong> lets you select individual items from both versions, or <strong>Skip</strong> to ignore.
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground flex-shrink-0"
+                      onClick={handleDismissOnboarding}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {/* Bulk actions bar */}
           <div className="flex items-center gap-3 px-6 py-3 border-b bg-muted/30">
