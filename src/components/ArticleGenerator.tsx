@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType } from 'lucide-react';
+import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { ArticleVisuals } from './ArticleVisuals';
+import { SmartContentPanel } from './SmartContentPanel';
+import { GeneratedContent } from '@/lib/contentGenerationEngine';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -539,7 +541,23 @@ export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle 
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showSmartPanel, setShowSmartPanel] = useState(true);
   const { toast } = useToast();
+
+  const handleApplySmartContent = (smartContent: GeneratedContent) => {
+    // Enhance the article with smart content
+    if (article && templateContent) {
+      setArticle({
+        ...article,
+        summary: smartContent.summary,
+        tags: [...new Set([...article.tags, ...smartContent.tags])],
+      });
+      toast({
+        title: 'Smart content applied',
+        description: 'Insights and tags have been added to your article',
+      });
+    }
+  };
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -695,6 +713,17 @@ export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle 
                     <div className="bg-secondary/50 rounded-lg p-4 mb-4">
                       <p className="text-foreground text-sm">{article.summary}</p>
                     </div>
+
+                    {/* Smart AI Content Panel */}
+                    {showSmartPanel && (
+                      <div className="mb-6">
+                        <SmartContentPanel 
+                          session={session} 
+                          profileType={profileType}
+                          onApplyContent={handleApplySmartContent}
+                        />
+                      </div>
+                    )}
 
                     {/* Visual elements for students and researchers */}
                     <ArticleVisuals 
