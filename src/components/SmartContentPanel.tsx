@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -221,9 +221,10 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [activeTab, setActiveTab] = useState<'insights' | 'takeaways' | 'actions'>('insights');
   
   // Preset management
-  const { presets, allTags, savePreset, deletePreset, filterPresets, duplicatePreset } = useContentPresets();
+  const { presets, allTags, savePreset, deletePreset, filterPresets, duplicatePreset, exportPresetsAsJSON, importPresetsFromJSON } = useContentPresets();
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetCategory, setPresetCategory] = useState<PresetCategory>('general');
@@ -306,6 +307,25 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
 
   const handleDuplicatePreset = (id: string) => {
     duplicatePreset(id);
+  };
+
+  const handleExportPreset = (id: string) => {
+    exportPresetsAsJSON([id]);
+  };
+
+  const handleExportAllPresets = () => {
+    exportPresetsAsJSON();
+  };
+
+  const handleImportPresets = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const result = await importPresetsFromJSON(file);
+    setImportResult(result);
+    
+    // Reset the input so the same file can be selected again
+    event.target.value = '';
   };
 
   // Drag end handlers
@@ -909,9 +929,62 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           </DialogDescription>
         </DialogHeader>
         
-        {/* Filters */}
-        {presets.length > 0 && (
-          <div className="space-y-3 pb-2 border-b">
+        {/* Import/Export and Filters */}
+        <div className="space-y-3 pb-2 border-b">
+          {/* Import result message */}
+          {importResult && (
+            <div className={cn(
+              "p-3 rounded-lg text-sm",
+              importResult.imported > 0 ? "bg-green-500/10 text-green-700" : "bg-amber-500/10 text-amber-700"
+            )}>
+              {importResult.imported > 0 && (
+                <p>✓ Successfully imported {importResult.imported} preset{importResult.imported !== 1 ? 's' : ''}</p>
+              )}
+              {importResult.skipped > 0 && (
+                <p>⚠ Skipped {importResult.skipped} preset{importResult.skipped !== 1 ? 's' : ''}</p>
+              )}
+              {importResult.errors.length > 0 && importResult.errors.slice(0, 3).map((err, i) => (
+                <p key={i} className="text-xs mt-1 opacity-80">• {err}</p>
+              ))}
+              <button 
+                onClick={() => setImportResult(null)} 
+                className="text-xs underline mt-1 hover:no-underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          
+          {/* Import/Export buttons */}
+          <div className="flex gap-2">
+            <label className="flex-1">
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportPresets}
+                className="hidden"
+              />
+              <Button variant="outline" size="sm" className="w-full h-9" asChild>
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import Presets
+                </span>
+              </Button>
+            </label>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex-1 h-9" 
+              onClick={handleExportAllPresets}
+              disabled={presets.length === 0}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              Export All
+            </Button>
+          </div>
+          
+          {/* Search and filters */}
+          {presets.length > 0 && (
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
@@ -962,8 +1035,8 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                 </DropdownMenu>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
         
         <div className="py-2 max-h-72 overflow-y-auto">
           {filteredPresets.length === 0 ? (
@@ -1039,6 +1112,10 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicatePreset(preset.id); }}>
                           <Copy className="w-4 h-4 mr-2" />
                           Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExportPreset(preset.id); }}>
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Export as JSON
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 

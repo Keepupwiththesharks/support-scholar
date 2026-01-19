@@ -182,6 +182,111 @@ export const useContentPresets = () => {
     );
   }, [presets, savePreset]);
 
+  // Export presets as JSON
+  const exportPresetsAsJSON = useCallback((presetIds?: string[]): void => {
+    const presetsToExport = presetIds 
+      ? presets.filter(p => presetIds.includes(p.id))
+      : presets;
+    
+    if (presetsToExport.length === 0) return;
+    
+    const exportData = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      presets: presetsToExport,
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = presetIds?.length === 1 
+      ? `preset-${presetsToExport[0].name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.json`
+      : `recap-presets-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [presets]);
+
+  // Import presets from JSON
+  const importPresetsFromJSON = useCallback((file: File): Promise<{ imported: number; skipped: number; errors: string[] }> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          const data = JSON.parse(content);
+          
+          // Validate structure
+          if (!data.presets || !Array.isArray(data.presets)) {
+            resolve({ imported: 0, skipped: 0, errors: ['Invalid file format: missing presets array'] });
+            return;
+          }
+          
+          let imported = 0;
+          let skipped = 0;
+          const errors: string[] = [];
+          const newPresets: ContentPreset[] = [];
+          
+          for (const preset of data.presets) {
+            // Validate required fields
+            if (!preset.name || !preset.content || !preset.profileType) {
+              errors.push(`Skipped preset: missing required fields`);
+              skipped++;
+              continue;
+            }
+            
+            // Check for duplicates by name and profile
+            const existingPreset = presets.find(
+              p => p.name.toLowerCase() === preset.name.toLowerCase() && p.profileType === preset.profileType
+            );
+            
+            if (existingPreset) {
+              errors.push(`Skipped "${preset.name}": already exists`);
+              skipped++;
+              continue;
+            }
+            
+            // Create new preset with fresh ID
+            const newPreset: ContentPreset = {
+              id: `preset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: preset.name,
+              description: preset.description,
+              content: preset.content,
+              profileType: preset.profileType,
+              category: preset.category || 'general',
+              tags: preset.tags || [],
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            
+            newPresets.push(newPreset);
+            imported++;
+          }
+          
+          if (newPresets.length > 0) {
+            const updatedPresets = [...presets, ...newPresets];
+            setPresets(updatedPresets);
+            saveToStorage(updatedPresets);
+          }
+          
+          resolve({ imported, skipped, errors });
+        } catch (error) {
+          resolve({ imported: 0, skipped: 0, errors: ['Failed to parse JSON file'] });
+        }
+      };
+      
+      reader.onerror = () => {
+        resolve({ imported: 0, skipped: 0, errors: ['Failed to read file'] });
+      };
+      
+      reader.readAsText(file);
+    });
+  }, [presets, saveToStorage]);
+
   return {
     presets,
     allTags,
@@ -194,5 +299,7 @@ export const useContentPresets = () => {
     getPresetsByTag,
     filterPresets,
     duplicatePreset,
+    exportPresetsAsJSON,
+    importPresetsFromJSON,
   };
 };
