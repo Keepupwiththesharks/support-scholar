@@ -87,6 +87,7 @@ export const CustomProfileManager = ({
   const [importData, setImportData] = useState('');
   const [templateSearch, setTemplateSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
 
   // Form state for creating/editing
   const [formName, setFormName] = useState('');
@@ -137,6 +138,48 @@ export const CustomProfileManager = ({
       template.outputTemplates
     );
     toast.success(`Added "${template.name}" profile`);
+  };
+
+  // Bulk selection helpers
+  const availableTemplates = useMemo(() => {
+    return filteredTemplates.filter(t => !customProfiles.some(p => p.name === t.name));
+  }, [filteredTemplates, customProfiles]);
+
+  const toggleTemplateSelection = (templateName: string) => {
+    setSelectedTemplates(prev => {
+      const next = new Set(prev);
+      if (next.has(templateName)) {
+        next.delete(templateName);
+      } else {
+        next.add(templateName);
+      }
+      return next;
+    });
+  };
+
+  const selectAllAvailable = () => {
+    setSelectedTemplates(new Set(availableTemplates.map(t => t.name)));
+  };
+
+  const clearSelection = () => {
+    setSelectedTemplates(new Set());
+  };
+
+  const handleBulkAdd = () => {
+    const templatesToAdd = PROFILE_TEMPLATES.filter(t => selectedTemplates.has(t.name));
+    templatesToAdd.forEach(template => {
+      const basePrefs = DEFAULT_PROFILES[template.basedOn].preferences;
+      createProfile(
+        template.name,
+        template.icon,
+        template.description,
+        template.basedOn,
+        { ...basePrefs, ...template.preferences },
+        template.outputTemplates
+      );
+    });
+    toast.success(`Added ${templatesToAdd.length} profiles`);
+    setSelectedTemplates(new Set());
   };
 
   const resetForm = () => {
@@ -415,7 +458,7 @@ export const CustomProfileManager = ({
 
             <TabsContent value="templates" className="flex-1 min-h-0 mt-4">
               <div className="space-y-4">
-                {/* Search and Filter */}
+                {/* Search, Filter, and Bulk Actions */}
                 <div className="flex gap-2">
                   <Input
                     placeholder="Search templates..."
@@ -437,7 +480,45 @@ export const CustomProfileManager = ({
                   </Select>
                 </div>
 
-                <ScrollArea className="h-[350px] pr-4">
+                {/* Bulk Selection Bar */}
+                <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border">
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      checked={availableTemplates.length > 0 && selectedTemplates.size === availableTemplates.length}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          selectAllAvailable();
+                        } else {
+                          clearSelection();
+                        }
+                      }}
+                      disabled={availableTemplates.length === 0}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedTemplates.size === 0 
+                        ? `${availableTemplates.length} available to add`
+                        : `${selectedTemplates.size} selected`}
+                    </span>
+                    {selectedTemplates.size > 0 && selectedTemplates.size < availableTemplates.length && (
+                      <Button variant="ghost" size="sm" onClick={selectAllAvailable} className="h-7 text-xs">
+                        Select All ({availableTemplates.length})
+                      </Button>
+                    )}
+                    {selectedTemplates.size > 0 && (
+                      <Button variant="ghost" size="sm" onClick={clearSelection} className="h-7 text-xs">
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {selectedTemplates.size > 0 && (
+                    <Button size="sm" onClick={handleBulkAdd} className="gap-1">
+                      <Plus className="w-4 h-4" />
+                      Add {selectedTemplates.size} Profile{selectedTemplates.size > 1 ? 's' : ''}
+                    </Button>
+                  )}
+                </div>
+
+                <ScrollArea className="h-[300px] pr-4">
                   {filteredTemplates.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <p>No templates match your search</p>
@@ -453,15 +534,24 @@ export const CustomProfileManager = ({
                           <div className="grid gap-2">
                             {templates.map((template) => {
                               const alreadyAdded = customProfiles.some(p => p.name === template.name);
+                              const isSelected = selectedTemplates.has(template.name);
                               return (
                                 <div
                                   key={template.name}
                                   className={cn(
                                     "p-3 rounded-lg border bg-card transition-all hover:shadow-sm",
-                                    alreadyAdded && "opacity-60"
+                                    alreadyAdded && "opacity-60",
+                                    isSelected && !alreadyAdded && "ring-2 ring-primary bg-primary/5"
                                   )}
                                 >
                                   <div className="flex items-start gap-3">
+                                    {!alreadyAdded && (
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => toggleTemplateSelection(template.name)}
+                                        className="mt-1"
+                                      />
+                                    )}
                                     <span className="text-2xl">{template.icon}</span>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
@@ -483,8 +573,15 @@ export const CustomProfileManager = ({
                                     </div>
                                     <Button
                                       size="sm"
-                                      variant={alreadyAdded ? "outline" : "default"}
-                                      onClick={() => !alreadyAdded && handleAddFromTemplate(template)}
+                                      variant={alreadyAdded ? "outline" : isSelected ? "secondary" : "default"}
+                                      onClick={() => {
+                                        if (alreadyAdded) return;
+                                        if (isSelected) {
+                                          toggleTemplateSelection(template.name);
+                                        } else {
+                                          handleAddFromTemplate(template);
+                                        }
+                                      }}
                                       disabled={alreadyAdded}
                                     >
                                       {alreadyAdded ? (
@@ -492,6 +589,8 @@ export const CustomProfileManager = ({
                                           <Check className="w-4 h-4 mr-1" />
                                           Added
                                         </>
+                                      ) : isSelected ? (
+                                        'Deselect'
                                       ) : (
                                         <>
                                           <Plus className="w-4 h-4 mr-1" />
