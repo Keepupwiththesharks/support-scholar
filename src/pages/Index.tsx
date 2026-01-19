@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { RecordingControls } from '@/components/RecordingControls';
 import { ActivityTimeline } from '@/components/ActivityTimeline';
@@ -15,6 +15,51 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Clock, History, FileText, Trash2, Sparkles, BookOpen, Zap, Shield, ArrowRight, Play, Users, Star, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+// Animation variants for scroll reveal
+const fadeInUp: Variants = {
+  hidden: { opacity: 0, y: 60 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.6, ease: "easeOut" }
+  }
+};
+
+const fadeInScale: Variants = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { duration: 0.5, ease: "easeOut" }
+  }
+};
+
+const staggerContainer: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.15, delayChildren: 0.1 }
+  }
+};
+
+const slideInLeft: Variants = {
+  hidden: { opacity: 0, x: -60 },
+  visible: { 
+    opacity: 1, 
+    x: 0,
+    transition: { duration: 0.6, ease: "easeOut" }
+  }
+};
+
+const slideInRight: Variants = {
+  hidden: { opacity: 0, x: 60 },
+  visible: { 
+    opacity: 1, 
+    x: 0,
+    transition: { duration: 0.6, ease: "easeOut" }
+  }
+};
 
 const Index = () => {
   const {
@@ -403,57 +448,85 @@ const Index = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-24 bg-gradient-to-b from-transparent via-muted/30 to-transparent">
+      <section className="py-24 bg-gradient-to-b from-transparent via-muted/30 to-transparent overflow-hidden">
         <div className="container mx-auto px-4">
           <motion.div 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
+            variants={fadeInUp}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
             className="text-center mb-16"
           >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            <motion.h2 
+              className="text-3xl md:text-4xl font-bold mb-4"
+            >
               Everything you need to <span className="text-amber-500">learn smarter</span>
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            </motion.h2>
+            <motion.p 
+              className="text-lg text-muted-foreground max-w-2xl mx-auto"
+            >
               Powerful features designed with simplicity in mind. No learning curve, just results.
-            </p>
+            </motion.p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <motion.div 
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto"
+          >
             {features.map((feature, index) => (
               <motion.div
                 key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className="group relative p-8 rounded-2xl bg-card border shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+                variants={fadeInUp}
+                whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                className="group relative p-8 rounded-2xl bg-card border shadow-sm hover:shadow-xl transition-shadow duration-300"
               >
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
+                <motion.div 
+                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 shadow-lg`}
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  transition={{ type: "spring", stiffness: 400 }}
+                >
                   <feature.icon className="w-7 h-7 text-white" />
-                </div>
+                </motion.div>
                 <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
                 <p className="text-muted-foreground leading-relaxed">{feature.description}</p>
               </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Social Proof Section */}
-      <section className="py-24">
+      <section className="py-24 overflow-hidden">
         <div className="container mx-auto px-4">
           <motion.div 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
+            variants={fadeInUp}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
             className="text-center mb-16"
           >
-            <div className="flex items-center justify-center gap-1 mb-4">
+            <motion.div 
+              className="flex items-center justify-center gap-1 mb-4"
+              initial={{ opacity: 0, scale: 0.5 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, type: "spring" }}
+            >
               {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-5 h-5 fill-amber-400 text-amber-400" />
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20, rotate: -30 }}
+                  whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1, duration: 0.4 }}
+                >
+                  <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Loved by <span className="text-amber-500">learners everywhere</span>
             </h2>
@@ -462,20 +535,27 @@ const Index = () => {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <motion.div 
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto"
+          >
             {testimonials.map((testimonial, index) => (
               <motion.div
                 key={testimonial.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className="p-6 rounded-2xl bg-card border"
+                variants={index === 0 ? slideInLeft : index === 2 ? slideInRight : fadeInUp}
+                whileHover={{ scale: 1.02 }}
+                className="p-6 rounded-2xl bg-card border hover:shadow-lg transition-shadow"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 flex items-center justify-center text-2xl">
+                  <motion.div 
+                    className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 flex items-center justify-center text-2xl"
+                    whileHover={{ scale: 1.1, rotate: 10 }}
+                  >
                     {testimonial.avatar}
-                  </div>
+                  </motion.div>
                   <div>
                     <p className="font-medium">{testimonial.name}</p>
                     <p className="text-sm text-muted-foreground">{testimonial.role}</p>
@@ -484,78 +564,139 @@ const Index = () => {
                 <p className="text-muted-foreground italic">"{testimonial.quote}"</p>
               </motion.div>
             ))}
-          </div>
+          </motion.div>
 
           <motion.div 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
             viewport={{ once: true }}
-            className="flex items-center justify-center gap-8 mt-12 text-muted-foreground"
+            className="flex flex-wrap items-center justify-center gap-8 mt-12 text-muted-foreground"
           >
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              <span>10k+ users</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              <span>50k+ recaps created</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5" />
-              <span>100k+ hours saved</span>
-            </div>
+            {[
+              { icon: Users, text: "10k+ users" },
+              { icon: FileText, text: "50k+ recaps created" },
+              { icon: Clock, text: "100k+ hours saved" }
+            ].map((stat, index) => (
+              <motion.div 
+                key={stat.text}
+                variants={fadeInScale}
+                className="flex items-center gap-2"
+                whileHover={{ scale: 1.05 }}
+              >
+                <stat.icon className="w-5 h-5" />
+                <span>{stat.text}</span>
+              </motion.div>
+            ))}
           </motion.div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-24">
+      <section className="py-24 overflow-hidden">
         <div className="container mx-auto px-4">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            className="max-w-4xl mx-auto text-center p-12 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 shadow-2xl shadow-orange-500/25"
+            initial={{ opacity: 0, y: 60, scale: 0.9 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ scale: 1.02 }}
+            className="max-w-4xl mx-auto text-center p-12 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 shadow-2xl shadow-orange-500/25 relative overflow-hidden"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Ready to transform how you learn?
-            </h2>
-            <p className="text-lg text-white/80 mb-8 max-w-xl mx-auto">
-              Start capturing your workflow today. It's free, private, and takes just seconds to get started.
-            </p>
-            <Button 
-              size="lg" 
-              className="bg-white text-orange-600 hover:bg-white/90 shadow-lg px-8 py-6 text-lg font-semibold"
-              onClick={() => setShowApp(true)}
-            >
-              Get Started Free
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
+            {/* Animated background circles */}
+            <motion.div 
+              className="absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"
+              animate={{ 
+                x: [0, 50, 0],
+                y: [0, 30, 0],
+              }}
+              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div 
+              className="absolute bottom-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl"
+              animate={{ 
+                x: [0, -30, 0],
+                y: [0, -40, 0],
+              }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            />
+            
+            <div className="relative z-10">
+              <motion.h2 
+                className="text-3xl md:text-4xl font-bold text-white mb-4"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.2 }}
+              >
+                Ready to transform how you learn?
+              </motion.h2>
+              <motion.p 
+                className="text-lg text-white/80 mb-8 max-w-xl mx-auto"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.3 }}
+              >
+                Start capturing your workflow today. It's free, private, and takes just seconds to get started.
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.4 }}
+              >
+                <Button 
+                  size="lg" 
+                  className="bg-white text-orange-600 hover:bg-white/90 shadow-lg px-8 py-6 text-lg font-semibold"
+                  onClick={() => setShowApp(true)}
+                >
+                  Get Started Free
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </motion.div>
+            </div>
           </motion.div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 border-t">
+      <motion.footer 
+        className="py-8 border-t"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <motion.div 
+              className="flex items-center gap-3"
+              whileHover={{ scale: 1.05 }}
+            >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <span className="font-semibold">Recap</span>
-            </div>
+            </motion.div>
             <p className="text-sm text-muted-foreground">
               Made with ❤️ for curious minds everywhere
             </p>
             <div className="flex gap-6 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
-              <a href="#" className="hover:text-foreground transition-colors">Terms</a>
-              <a href="#" className="hover:text-foreground transition-colors">Support</a>
+              {['Privacy', 'Terms', 'Support'].map((link) => (
+                <motion.a 
+                  key={link}
+                  href="#" 
+                  className="hover:text-foreground transition-colors"
+                  whileHover={{ y: -2 }}
+                >
+                  {link}
+                </motion.a>
+              ))}
             </div>
           </div>
         </div>
-      </footer>
+      </motion.footer>
     </div>
   );
 };
