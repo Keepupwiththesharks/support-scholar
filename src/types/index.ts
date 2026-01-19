@@ -160,6 +160,14 @@ export interface SavedArticle {
   templateLabel: string;
 }
 
+// All available output template types
+export type OutputTemplateType = 
+  | 'study-guide' | 'flashcards' | 'lecture-notes' | 'summary'
+  | 'dev-docs' | 'changelog' | 'debug-log' | 'readme'
+  | 'knowledge-base' | 'ticket-summary' | 'runbook'
+  | 'research-notes' | 'bibliography' | 'findings'
+  | 'meeting-notes' | 'simple' | 'detailed';
+
 export interface KnowledgeArticle {
   id: string;
   title: string;
@@ -171,7 +179,7 @@ export interface KnowledgeArticle {
   tags: string[];
   createdAt: Date;
   sessionId: string;
-  template: 'salesforce' | 'microsoft' | 'confluence' | 'custom';
+  template: OutputTemplateType;
 }
 
 export type RecordingStatus = 'idle' | 'recording' | 'paused';
