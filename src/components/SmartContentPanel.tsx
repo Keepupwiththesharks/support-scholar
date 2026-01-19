@@ -1293,231 +1293,342 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
 
     {/* Conflict Resolution Dialog */}
     <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
-            Resolve Import Conflicts
-          </DialogTitle>
-          <DialogDescription>
-            {pendingImport?.conflicts.length} preset{pendingImport?.conflicts.length !== 1 ? 's' : ''} already exist. Choose how to handle each conflict.
-          </DialogDescription>
-        </DialogHeader>
-        
-        {/* Bulk actions */}
-        <div className="flex items-center gap-2 pb-2 border-b">
-          <span className="text-sm text-muted-foreground">Set all to:</span>
-          <Button variant="outline" size="sm" onClick={() => handleSetAllConflicts('overwrite')}>
-            Overwrite
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleSetAllConflicts('keep_both')}>
-            Keep Both
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleSetAllConflicts('skip')}>
-            Skip
-          </Button>
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        {/* Header with gradient */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent p-6 pb-4">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400/10 rounded-full blur-3xl" />
+          <div className="relative">
+            <DialogHeader className="space-y-2">
+              <DialogTitle className="flex items-center gap-3 text-xl">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <GitMerge className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <span className="font-semibold">Resolve Import Conflicts</span>
+                  <p className="text-sm font-normal text-muted-foreground mt-0.5">
+                    {pendingImport?.conflicts.length} preset{pendingImport?.conflicts.length !== 1 ? 's' : ''} need your attention
+                  </p>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+          </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
-          {pendingImport?.conflicts.map((conflict) => {
+        {/* Bulk actions bar */}
+        <div className="flex items-center gap-3 px-6 py-3 border-b bg-muted/30">
+          <span className="text-sm font-medium text-muted-foreground">Quick actions:</span>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => handleSetAllConflicts('overwrite')}
+              className="h-8 rounded-full px-4 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/30 transition-colors"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
+              Overwrite All
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => handleSetAllConflicts('keep_both')}
+              className="h-8 rounded-full px-4 hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500/30 transition-colors"
+            >
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
+              Keep All
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => handleSetAllConflicts('cherry_pick')}
+              className="h-8 rounded-full px-4 hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500/30 transition-colors"
+            >
+              <GitMerge className="w-3.5 h-3.5 mr-1.5" />
+              Cherry-Pick All
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => handleSetAllConflicts('skip')}
+              className="h-8 rounded-full px-4 hover:bg-muted transition-colors"
+            >
+              <X className="w-3.5 h-3.5 mr-1.5" />
+              Skip All
+            </Button>
+          </div>
+        </div>
+        
+        {/* Conflicts list */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
+          {pendingImport?.conflicts.map((conflict, conflictIndex) => {
             const isExpanded = expandedConflicts.has(conflict.imported.name);
+            const resolution = conflictResolutions[conflict.imported.name];
+            
             return (
-              <div key={conflict.imported.name} className="rounded-lg border bg-muted/30 overflow-hidden">
-                <div className="p-3">
-                  <div className="flex items-start justify-between gap-3">
+              <div 
+                key={conflict.imported.name} 
+                className={cn(
+                  "rounded-2xl border-2 overflow-hidden transition-all duration-200",
+                  resolution === 'overwrite' && "border-amber-500/30 bg-amber-500/5",
+                  resolution === 'keep_both' && "border-blue-500/30 bg-blue-500/5",
+                  resolution === 'cherry_pick' && "border-purple-500/30 bg-purple-500/5",
+                  resolution === 'skip' && "border-muted bg-muted/20 opacity-60",
+                  !resolution && "border-border bg-card"
+                )}
+              >
+                {/* Conflict header */}
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-sm truncate">{conflict.imported.name}</h4>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={() => toggleConflictPreview(conflict.imported.name)}
-                        >
-                          <Eye className="w-3 h-3 mr-1" />
-                          Preview
-                          {isExpanded ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
-                        </Button>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-semibold text-primary">
+                          {conflictIndex + 1}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-base">{conflict.imported.name}</h4>
+                          <div className="flex items-center gap-4 mt-1">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                              Existing: {conflict.existing.content.insights.length + conflict.existing.content.keyTakeaways.length + conflict.existing.content.actionItems.length} items
+                            </span>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              Imported: {conflict.imported.content.insights.length + conflict.imported.content.keyTakeaways.length + conflict.imported.content.actionItems.length} items
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Existing: {conflict.existing.content.insights.length} insights, {conflict.existing.content.keyTakeaways.length} takeaways, {conflict.existing.content.actionItems.length} actions
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Imported: {conflict.imported.content.insights.length} insights, {conflict.imported.content.keyTakeaways.length} takeaways, {conflict.imported.content.actionItems.length} actions
-                      </p>
                     </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 flex-wrap">
                     <Button
-                      variant={conflictResolutions[conflict.imported.name] === 'overwrite' ? 'default' : 'outline'}
+                      variant="ghost"
                       size="sm"
-                      className="text-xs"
+                      className={cn(
+                        "h-8 px-3 rounded-full transition-colors",
+                        isExpanded ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => toggleConflictPreview(conflict.imported.name)}
+                    >
+                      <Eye className="w-4 h-4 mr-1.5" />
+                      {isExpanded ? 'Hide' : 'Compare'}
+                      {isExpanded ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                    </Button>
+                  </div>
+                  
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-4">
+                    <Button
+                      variant={resolution === 'overwrite' ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        "h-9 rounded-xl flex-1 transition-all",
+                        resolution === 'overwrite' 
+                          ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20" 
+                          : "hover:border-amber-500/50 hover:bg-amber-500/10"
+                      )}
                       onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
                     >
-                      <ArrowLeftRight className="w-3 h-3 mr-1" />
+                      <ArrowLeftRight className="w-4 h-4 mr-2" />
                       Overwrite
                     </Button>
                     <Button
-                      variant={conflictResolutions[conflict.imported.name] === 'keep_both' ? 'default' : 'outline'}
+                      variant={resolution === 'keep_both' ? 'default' : 'outline'}
                       size="sm"
-                      className="text-xs"
+                      className={cn(
+                        "h-9 rounded-xl flex-1 transition-all",
+                        resolution === 'keep_both' 
+                          ? "bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20" 
+                          : "hover:border-blue-500/50 hover:bg-blue-500/10"
+                      )}
                       onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
                     >
-                      <Copy className="w-3 h-3 mr-1" />
+                      <Copy className="w-4 h-4 mr-2" />
                       Keep Both
                     </Button>
                     <Button
-                      variant={conflictResolutions[conflict.imported.name] === 'cherry_pick' ? 'default' : 'outline'}
+                      variant={resolution === 'cherry_pick' ? 'default' : 'outline'}
                       size="sm"
-                      className="text-xs"
+                      className={cn(
+                        "h-9 rounded-xl flex-1 transition-all",
+                        resolution === 'cherry_pick' 
+                          ? "bg-purple-500 hover:bg-purple-600 text-white shadow-md shadow-purple-500/20" 
+                          : "hover:border-purple-500/50 hover:bg-purple-500/10"
+                      )}
                       onClick={() => initializeCherryPick(conflict)}
                     >
-                      <GitMerge className="w-3 h-3 mr-1" />
+                      <GitMerge className="w-4 h-4 mr-2" />
                       Cherry-Pick
                     </Button>
                     <Button
-                      variant={conflictResolutions[conflict.imported.name] === 'skip' ? 'secondary' : 'outline'}
+                      variant={resolution === 'skip' ? 'secondary' : 'outline'}
                       size="sm"
-                      className="text-xs"
+                      className="h-9 rounded-xl px-4 transition-all"
                       onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
                     >
-                      <X className="w-3 h-3 mr-1" />
-                      Skip
+                      <X className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
                 
                 {/* Side-by-side diff preview with cherry-pick support */}
                 {isExpanded && (
-                  <div className="border-t bg-background">
+                  <div className="border-t">
                     {/* Cherry-pick mode header */}
-                    {conflictResolutions[conflict.imported.name] === 'cherry_pick' && (
-                      <div className="px-3 py-2 bg-primary/5 border-b flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs">
-                          <GitMerge className="w-4 h-4 text-primary" />
-                          <span className="font-medium text-primary">Cherry-Pick Mode</span>
-                          <span className="text-muted-foreground">- Select items to include in the merged preset</span>
+                    {resolution === 'cherry_pick' && (
+                      <div className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-b flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                            <GitMerge className="w-4 h-4 text-purple-600" />
+                          </div>
+                          <div>
+                            <span className="font-medium text-purple-600 text-sm">Cherry-Pick Mode</span>
+                            <p className="text-xs text-muted-foreground">Select items from both presets to create a merged version</p>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="h-6 text-xs"
+                            className="h-7 text-xs rounded-full px-3 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
                             onClick={() => selectAllFromSource(conflict.imported.name, 'existing', conflict)}
                           >
-                            Select All Existing
+                            Use Existing
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="h-6 text-xs"
+                            className="h-7 text-xs rounded-full px-3 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
                             onClick={() => selectAllFromSource(conflict.imported.name, 'imported', conflict)}
                           >
-                            Select All Imported
+                            Use Imported
                           </Button>
                         </div>
                       </div>
                     )}
                     
-                    <div className="grid grid-cols-2 divide-x">
-                      {/* Existing preset */}
-                      <div className="p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded">Existing</span>
-                          <span className="text-xs text-muted-foreground">Updated {new Date(conflict.existing.updatedAt).toLocaleDateString()}</span>
+                    <div className="grid grid-cols-2">
+                      {/* Existing preset column */}
+                      <div className="p-4 bg-gradient-to-br from-amber-500/5 to-transparent border-r">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-600 text-xs font-semibold flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Existing
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            Updated {new Date(conflict.existing.updatedAt).toLocaleDateString()}
+                          </span>
                         </div>
-                        <div className="space-y-3 text-xs">
-                          <div>
-                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <Lightbulb className="w-3 h-3" /> Insights ({conflict.existing.content.insights.length})
-                            </p>
-                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                        <div className="space-y-4">
+                          {/* Insights */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Insights</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {conflict.existing.content.insights.length}
+                              </Badge>
+                            </div>
+                            <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.existing.content.insights.map((item, i) => {
-                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isCherryPick = resolution === 'cherry_pick';
                                 const isSelected = cherryPickSelections[conflict.imported.name]?.insights.has(item);
                                 return (
                                   <li 
                                     key={i} 
                                     className={cn(
-                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
-                                      isCherryPick && "cursor-pointer hover:bg-muted/50",
-                                      isCherryPick && isSelected && "bg-primary/10"
+                                      "flex items-start gap-2 py-1.5 px-2 rounded-lg text-xs transition-all",
+                                      isCherryPick && "cursor-pointer",
+                                      isCherryPick && isSelected && "bg-purple-500/20 ring-1 ring-purple-500/30",
+                                      isCherryPick && !isSelected && "hover:bg-muted/50 opacity-60",
+                                      !isCherryPick && "bg-muted/30"
                                     )}
                                     onClick={() => isCherryPick && toggleCherryPickItem(conflict.imported.name, 'insights', item)}
                                   >
                                     {isCherryPick && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isSelected} 
-                                        onChange={() => {}}
-                                        className="mt-0.5 rounded border-muted-foreground"
-                                      />
+                                      <div className={cn(
+                                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                                        isSelected ? "bg-purple-500 border-purple-500" : "border-muted-foreground/30"
+                                      )}>
+                                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                                      </div>
                                     )}
-                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>{isCherryPick ? '' : '• '}{item}</span>
+                                    <span className="leading-relaxed">{item}</span>
                                   </li>
                                 );
                               })}
                             </ul>
                           </div>
-                          <div>
-                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <Target className="w-3 h-3" /> Takeaways ({conflict.existing.content.keyTakeaways.length})
-                            </p>
-                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                          {/* Takeaways */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <Target className="w-3.5 h-3.5 text-blue-500" />
+                              <span>Takeaways</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {conflict.existing.content.keyTakeaways.length}
+                              </Badge>
+                            </div>
+                            <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.existing.content.keyTakeaways.map((item, i) => {
-                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isCherryPick = resolution === 'cherry_pick';
                                 const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.has(item);
                                 return (
                                   <li 
                                     key={i} 
                                     className={cn(
-                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
-                                      isCherryPick && "cursor-pointer hover:bg-muted/50",
-                                      isCherryPick && isSelected && "bg-primary/10"
+                                      "flex items-start gap-2 py-1.5 px-2 rounded-lg text-xs transition-all",
+                                      isCherryPick && "cursor-pointer",
+                                      isCherryPick && isSelected && "bg-purple-500/20 ring-1 ring-purple-500/30",
+                                      isCherryPick && !isSelected && "hover:bg-muted/50 opacity-60",
+                                      !isCherryPick && "bg-muted/30"
                                     )}
                                     onClick={() => isCherryPick && toggleCherryPickItem(conflict.imported.name, 'takeaways', item)}
                                   >
                                     {isCherryPick && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isSelected} 
-                                        onChange={() => {}}
-                                        className="mt-0.5 rounded border-muted-foreground"
-                                      />
+                                      <div className={cn(
+                                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                                        isSelected ? "bg-purple-500 border-purple-500" : "border-muted-foreground/30"
+                                      )}>
+                                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                                      </div>
                                     )}
-                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>{isCherryPick ? '' : '✓ '}{item}</span>
+                                    <span className="leading-relaxed">{item}</span>
                                   </li>
                                 );
                               })}
                             </ul>
                           </div>
-                          <div>
-                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <ArrowRight className="w-3 h-3" /> Actions ({conflict.existing.content.actionItems.length})
-                            </p>
-                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                          {/* Actions */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <ArrowRight className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>Actions</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {conflict.existing.content.actionItems.length}
+                              </Badge>
+                            </div>
+                            <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.existing.content.actionItems.map((item, i) => {
-                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isCherryPick = resolution === 'cherry_pick';
                                 const isSelected = cherryPickSelections[conflict.imported.name]?.actions.has(item);
                                 return (
                                   <li 
                                     key={i} 
                                     className={cn(
-                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
-                                      isCherryPick && "cursor-pointer hover:bg-muted/50",
-                                      isCherryPick && isSelected && "bg-primary/10"
+                                      "flex items-start gap-2 py-1.5 px-2 rounded-lg text-xs transition-all",
+                                      isCherryPick && "cursor-pointer",
+                                      isCherryPick && isSelected && "bg-purple-500/20 ring-1 ring-purple-500/30",
+                                      isCherryPick && !isSelected && "hover:bg-muted/50 opacity-60",
+                                      !isCherryPick && "bg-muted/30"
                                     )}
                                     onClick={() => isCherryPick && toggleCherryPickItem(conflict.imported.name, 'actions', item)}
                                   >
                                     {isCherryPick && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isSelected} 
-                                        onChange={() => {}}
-                                        className="mt-0.5 rounded border-muted-foreground"
-                                      />
+                                      <div className={cn(
+                                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                                        isSelected ? "bg-purple-500 border-purple-500" : "border-muted-foreground/30"
+                                      )}>
+                                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                                      </div>
                                     )}
-                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>{isCherryPick ? '' : '☐ '}{item}</span>
+                                    <span className="leading-relaxed">{item}</span>
                                   </li>
                                 );
                               })}
@@ -1526,30 +1637,40 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                         </div>
                       </div>
                       
-                      {/* Imported preset */}
-                      <div className="p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded">Imported</span>
+                      {/* Imported preset column */}
+                      <div className="p-4 bg-gradient-to-bl from-emerald-500/5 to-transparent">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-600 text-xs font-semibold flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Imported
+                          </div>
                           <span className="text-xs text-muted-foreground">From file</span>
                         </div>
-                        <div className="space-y-3 text-xs">
-                          <div>
-                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <Lightbulb className="w-3 h-3" /> Insights ({conflict.imported.content.insights.length})
-                            </p>
-                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                        <div className="space-y-4">
+                          {/* Insights */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Insights</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {conflict.imported.content.insights.length}
+                              </Badge>
+                            </div>
+                            <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.imported.content.insights.map((item, i) => {
-                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isCherryPick = resolution === 'cherry_pick';
                                 const isSelected = cherryPickSelections[conflict.imported.name]?.insights.has(item);
                                 const isInExisting = conflict.existing.content.insights.includes(item);
                                 return (
                                   <li 
                                     key={i} 
                                     className={cn(
-                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
-                                      isCherryPick && !isInExisting && "cursor-pointer hover:bg-muted/50",
-                                      isCherryPick && isSelected && "bg-primary/10",
-                                      isCherryPick && isInExisting && "opacity-50"
+                                      "flex items-start gap-2 py-1.5 px-2 rounded-lg text-xs transition-all",
+                                      isCherryPick && !isInExisting && "cursor-pointer",
+                                      isCherryPick && isSelected && "bg-purple-500/20 ring-1 ring-purple-500/30",
+                                      isCherryPick && !isSelected && !isInExisting && "hover:bg-muted/50 opacity-60",
+                                      isCherryPick && isInExisting && "opacity-30",
+                                      !isCherryPick && "bg-muted/30"
                                     )}
                                     onClick={() => isCherryPick && !isInExisting && toggleCherryPickItem(conflict.imported.name, 'insights', item)}
                                   >
@@ -1571,76 +1692,94 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                               })}
                             </ul>
                           </div>
-                          <div>
-                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <Target className="w-3 h-3" /> Takeaways ({conflict.imported.content.keyTakeaways.length})
-                            </p>
-                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                          {/* Takeaways */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <Target className="w-3.5 h-3.5 text-blue-500" />
+                              <span>Takeaways</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {conflict.imported.content.keyTakeaways.length}
+                              </Badge>
+                            </div>
+                            <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.imported.content.keyTakeaways.map((item, i) => {
-                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isCherryPick = resolution === 'cherry_pick';
                                 const isSelected = cherryPickSelections[conflict.imported.name]?.takeaways.has(item);
                                 const isInExisting = conflict.existing.content.keyTakeaways.includes(item);
                                 return (
                                   <li 
                                     key={i} 
                                     className={cn(
-                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
-                                      isCherryPick && !isInExisting && "cursor-pointer hover:bg-muted/50",
-                                      isCherryPick && isSelected && "bg-primary/10",
-                                      isCherryPick && isInExisting && "opacity-50"
+                                      "flex items-start gap-2 py-1.5 px-2 rounded-lg text-xs transition-all",
+                                      isCherryPick && !isInExisting && "cursor-pointer",
+                                      isCherryPick && isSelected && "bg-purple-500/20 ring-1 ring-purple-500/30",
+                                      isCherryPick && !isSelected && !isInExisting && "hover:bg-muted/50 opacity-60",
+                                      isCherryPick && isInExisting && "opacity-30",
+                                      !isCherryPick && "bg-muted/30"
                                     )}
                                     onClick={() => isCherryPick && !isInExisting && toggleCherryPickItem(conflict.imported.name, 'takeaways', item)}
                                   >
                                     {isCherryPick && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isSelected} 
-                                        disabled={isInExisting}
-                                        onChange={() => {}}
-                                        className="mt-0.5 rounded border-muted-foreground"
-                                      />
+                                      <div className={cn(
+                                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                                        isSelected ? "bg-purple-500 border-purple-500" : "border-muted-foreground/30",
+                                        isInExisting && "opacity-30"
+                                      )}>
+                                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                                      </div>
                                     )}
-                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>
-                                      {isCherryPick ? '' : '✓ '}{item}
-                                      {isCherryPick && isInExisting && <span className="text-muted-foreground ml-1">(duplicate)</span>}
+                                    <span className="leading-relaxed">
+                                      {item}
+                                      {isCherryPick && isInExisting && (
+                                        <span className="text-muted-foreground ml-1.5 text-[10px]">(exists)</span>
+                                      )}
                                     </span>
                                   </li>
                                 );
                               })}
                             </ul>
                           </div>
-                          <div>
-                            <p className="font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <ArrowRight className="w-3 h-3" /> Actions ({conflict.imported.content.actionItems.length})
-                            </p>
-                            <ul className="space-y-0.5 text-foreground max-h-32 overflow-y-auto">
+                          {/* Actions */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <ArrowRight className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>Actions</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {conflict.imported.content.actionItems.length}
+                              </Badge>
+                            </div>
+                            <ul className="space-y-1 max-h-28 overflow-y-auto pr-2">
                               {conflict.imported.content.actionItems.map((item, i) => {
-                                const isCherryPick = conflictResolutions[conflict.imported.name] === 'cherry_pick';
+                                const isCherryPick = resolution === 'cherry_pick';
                                 const isSelected = cherryPickSelections[conflict.imported.name]?.actions.has(item);
                                 const isInExisting = conflict.existing.content.actionItems.includes(item);
                                 return (
                                   <li 
                                     key={i} 
                                     className={cn(
-                                      "flex items-start gap-2 py-0.5 rounded px-1 -mx-1",
-                                      isCherryPick && !isInExisting && "cursor-pointer hover:bg-muted/50",
-                                      isCherryPick && isSelected && "bg-primary/10",
-                                      isCherryPick && isInExisting && "opacity-50"
+                                      "flex items-start gap-2 py-1.5 px-2 rounded-lg text-xs transition-all",
+                                      isCherryPick && !isInExisting && "cursor-pointer",
+                                      isCherryPick && isSelected && "bg-purple-500/20 ring-1 ring-purple-500/30",
+                                      isCherryPick && !isSelected && !isInExisting && "hover:bg-muted/50 opacity-60",
+                                      isCherryPick && isInExisting && "opacity-30",
+                                      !isCherryPick && "bg-muted/30"
                                     )}
                                     onClick={() => isCherryPick && !isInExisting && toggleCherryPickItem(conflict.imported.name, 'actions', item)}
                                   >
                                     {isCherryPick && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isSelected} 
-                                        disabled={isInExisting}
-                                        onChange={() => {}}
-                                        className="mt-0.5 rounded border-muted-foreground"
-                                      />
+                                      <div className={cn(
+                                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
+                                        isSelected ? "bg-purple-500 border-purple-500" : "border-muted-foreground/30",
+                                        isInExisting && "opacity-30"
+                                      )}>
+                                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                                      </div>
                                     )}
-                                    <span className={cn("truncate", !isCherryPick && "ml-3")}>
-                                      {isCherryPick ? '' : '☐ '}{item}
-                                      {isCherryPick && isInExisting && <span className="text-muted-foreground ml-1">(duplicate)</span>}
+                                    <span className="leading-relaxed">
+                                      {item}
+                                      {isCherryPick && isInExisting && (
+                                        <span className="text-muted-foreground ml-1.5 text-[10px]">(exists)</span>
+                                      )}
                                     </span>
                                   </li>
                                 );
@@ -1652,12 +1791,27 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                     </div>
                     
                     {/* Cherry-pick summary */}
-                    {conflictResolutions[conflict.imported.name] === 'cherry_pick' && cherryPickSelections[conflict.imported.name] && (
-                      <div className="px-3 py-2 bg-muted/30 border-t text-xs text-muted-foreground">
-                        <span className="font-medium">Merged result: </span>
-                        {cherryPickSelections[conflict.imported.name].insights.size} insights, {' '}
-                        {cherryPickSelections[conflict.imported.name].takeaways.size} takeaways, {' '}
-                        {cherryPickSelections[conflict.imported.name].actions.size} actions
+                    {resolution === 'cherry_pick' && cherryPickSelections[conflict.imported.name] && (
+                      <div className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-t">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                              <Check className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-purple-600">Merged Result</p>
+                              <p className="text-xs text-muted-foreground">
+                                {cherryPickSelections[conflict.imported.name].insights.size} insights · {cherryPickSelections[conflict.imported.name].takeaways.size} takeaways · {cherryPickSelections[conflict.imported.name].actions.size} actions
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-2xl font-bold text-purple-500">
+                            {cherryPickSelections[conflict.imported.name].insights.size + 
+                             cherryPickSelections[conflict.imported.name].takeaways.size + 
+                             cherryPickSelections[conflict.imported.name].actions.size}
+                            <span className="text-xs font-normal text-muted-foreground ml-1">items</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1667,21 +1821,33 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           })}
         </div>
         
-        {pendingImport && pendingImport.presets.length > 0 && (
-          <p className="text-xs text-muted-foreground border-t pt-2">
-            {pendingImport.presets.length} non-conflicting preset{pendingImport.presets.length !== 1 ? 's' : ''} will also be imported.
-          </p>
-        )}
-        
-        <DialogFooter>
-          <Button variant="outline" onClick={() => { setShowConflictDialog(false); setPendingImport(null); }}>
-            Cancel
-          </Button>
-          <Button onClick={handleApplyConflictResolutions}>
-            <Check className="w-4 h-4 mr-2" />
-            Apply & Import
-          </Button>
-        </DialogFooter>
+        {/* Footer */}
+        <div className="border-t bg-muted/30 px-6 py-4">
+          {pendingImport && pendingImport.presets.length > 0 && (
+            <p className="text-xs text-muted-foreground mb-3 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center text-[10px] font-bold">
+                +{pendingImport.presets.length}
+              </span>
+              {pendingImport.presets.length} non-conflicting preset{pendingImport.presets.length !== 1 ? 's' : ''} will also be imported
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => { setShowConflictDialog(false); setPendingImport(null); }}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleApplyConflictResolutions}
+              className="rounded-xl bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-500/90 shadow-md shadow-primary/20"
+            >
+              <Check className="w-4 h-4 mr-2" />
+              Apply & Import
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
     </>
