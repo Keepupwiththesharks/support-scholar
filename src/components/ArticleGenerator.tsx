@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { ArticleVisuals } from './ArticleVisuals';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -687,13 +688,20 @@ export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle 
                   </Button>
                 </div>
               ) : (
-                <ScrollArea className="h-[400px]">
+                <ScrollArea className="h-[500px]">
                   <div className="prose prose-sm max-w-none">
                     <h1 className="text-xl font-bold mb-4">{article.title}</h1>
                     
                     <div className="bg-secondary/50 rounded-lg p-4 mb-4">
                       <p className="text-foreground text-sm">{article.summary}</p>
                     </div>
+
+                    {/* Visual elements for students and researchers */}
+                    <ArticleVisuals 
+                      session={session} 
+                      profileType={profileType} 
+                      templateType={template} 
+                    />
 
                     {templateContent?.sections.map((section, index) => (
                       <div key={index} className="mb-4">
