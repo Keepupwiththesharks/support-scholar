@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp, GitMerge } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1469,42 +1470,75 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                 </div>
                 
                 {/* Side-by-side diff preview with cherry-pick support */}
-                {isExpanded && (
-                  <div className="border-t">
-                    {/* Cherry-pick mode header */}
-                    {resolution === 'cherry_pick' && (
-                      <div className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-b flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                            <GitMerge className="w-4 h-4 text-purple-600" />
-                          </div>
-                          <div>
-                            <span className="font-medium text-purple-600 text-sm">Cherry-Pick Mode</span>
-                            <p className="text-xs text-muted-foreground">Select items from both presets to create a merged version</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs rounded-full px-3 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
-                            onClick={() => selectAllFromSource(conflict.imported.name, 'existing', conflict)}
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ 
+                        height: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+                        opacity: { duration: 0.2, ease: 'easeInOut' }
+                      }}
+                      className="overflow-hidden border-t"
+                    >
+                      {/* Cherry-pick mode header */}
+                      <AnimatePresence mode="wait">
+                        {resolution === 'cherry_pick' && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-b flex items-center justify-between"
                           >
-                            Use Existing
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs rounded-full px-3 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
-                            onClick={() => selectAllFromSource(conflict.imported.name, 'imported', conflict)}
-                          >
-                            Use Imported
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="grid grid-cols-2">
+                            <div className="flex items-center gap-3">
+                              <motion.div 
+                                initial={{ scale: 0.5, rotate: -180 }}
+                                animate={{ scale: 1, rotate: 0 }}
+                                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                                className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center"
+                              >
+                                <GitMerge className="w-4 h-4 text-purple-600" />
+                              </motion.div>
+                              <div>
+                                <span className="font-medium text-purple-600 text-sm">Cherry-Pick Mode</span>
+                                <p className="text-xs text-muted-foreground">Select items from both presets to create a merged version</p>
+                              </div>
+                            </div>
+                            <motion.div 
+                              initial={{ opacity: 0, x: 20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: 0.1 }}
+                              className="flex gap-2"
+                            >
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs rounded-full px-3 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                                onClick={() => selectAllFromSource(conflict.imported.name, 'existing', conflict)}
+                              >
+                                Use Existing
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs rounded-full px-3 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+                                onClick={() => selectAllFromSource(conflict.imported.name, 'imported', conflict)}
+                              >
+                                Use Imported
+                              </Button>
+                            </motion.div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="grid grid-cols-2"
+                      >
                       {/* Existing preset column */}
                       <div className="p-4 bg-gradient-to-br from-amber-500/5 to-transparent border-r">
                         <div className="flex items-center gap-2 mb-4">
@@ -1788,34 +1822,53 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                           </div>
                         </div>
                       </div>
-                    </div>
+                      </motion.div>
                     
-                    {/* Cherry-pick summary */}
-                    {resolution === 'cherry_pick' && cherryPickSelections[conflict.imported.name] && (
-                      <div className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-t">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-purple-600" />
+                      {/* Cherry-pick summary */}
+                      <AnimatePresence>
+                        {resolution === 'cherry_pick' && cherryPickSelections[conflict.imported.name] && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            transition={{ duration: 0.2 }}
+                            className="px-4 py-3 bg-gradient-to-r from-purple-500/10 to-transparent border-t"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <motion.div 
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                  className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center"
+                                >
+                                  <Check className="w-4 h-4 text-purple-600" />
+                                </motion.div>
+                                <div>
+                                  <p className="text-sm font-medium text-purple-600">Merged Result</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {cherryPickSelections[conflict.imported.name].insights.size} insights · {cherryPickSelections[conflict.imported.name].takeaways.size} takeaways · {cherryPickSelections[conflict.imported.name].actions.size} actions
+                                  </p>
+                                </div>
+                              </div>
+                              <motion.div 
+                                key={cherryPickSelections[conflict.imported.name].insights.size + cherryPickSelections[conflict.imported.name].takeaways.size + cherryPickSelections[conflict.imported.name].actions.size}
+                                initial={{ scale: 1.2 }}
+                                animate={{ scale: 1 }}
+                                className="text-2xl font-bold text-purple-500"
+                              >
+                                {cherryPickSelections[conflict.imported.name].insights.size + 
+                                 cherryPickSelections[conflict.imported.name].takeaways.size + 
+                                 cherryPickSelections[conflict.imported.name].actions.size}
+                                <span className="text-xs font-normal text-muted-foreground ml-1">items</span>
+                              </motion.div>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-purple-600">Merged Result</p>
-                              <p className="text-xs text-muted-foreground">
-                                {cherryPickSelections[conflict.imported.name].insights.size} insights · {cherryPickSelections[conflict.imported.name].takeaways.size} takeaways · {cherryPickSelections[conflict.imported.name].actions.size} actions
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-2xl font-bold text-purple-500">
-                            {cherryPickSelections[conflict.imported.name].insights.size + 
-                             cherryPickSelections[conflict.imported.name].takeaways.size + 
-                             cherryPickSelections[conflict.imported.name].actions.size}
-                            <span className="text-xs font-normal text-muted-foreground ml-1">items</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             );
           })}
