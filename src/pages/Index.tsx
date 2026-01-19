@@ -153,6 +153,7 @@ const Index = () => {
       {selectedSession && (
         <ArticleGenerator
           session={selectedSession}
+          profileType={profileType}
           onClose={() => setSelectedSession(null)}
         />
       )}

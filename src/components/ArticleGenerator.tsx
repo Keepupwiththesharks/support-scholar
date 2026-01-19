@@ -2,14 +2,64 @@ import { useState } from 'react';
 import { FileText, Copy, Download, Check, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RecordingSession, KnowledgeArticle } from '@/types';
+import { RecordingSession, KnowledgeArticle, UserProfileType } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 
 interface ArticleGeneratorProps {
   session: RecordingSession;
+  profileType: UserProfileType;
   onClose: () => void;
 }
+
+// Profile-specific template configurations
+const PROFILE_TEMPLATES: Record<UserProfileType, { templates: KnowledgeArticle['template'][]; labels: Record<string, string> }> = {
+  support: {
+    templates: ['salesforce', 'microsoft', 'confluence', 'custom'],
+    labels: {
+      salesforce: 'Salesforce KB',
+      microsoft: 'Microsoft Docs',
+      confluence: 'Confluence',
+      custom: 'Ticket Summary',
+    },
+  },
+  student: {
+    templates: ['microsoft', 'confluence', 'custom', 'salesforce'],
+    labels: {
+      microsoft: 'Study Guide',
+      confluence: 'Lecture Notes',
+      custom: 'Flashcards',
+      salesforce: 'Summary',
+    },
+  },
+  developer: {
+    templates: ['confluence', 'microsoft', 'custom', 'salesforce'],
+    labels: {
+      confluence: 'Dev Docs',
+      microsoft: 'README',
+      custom: 'Changelog',
+      salesforce: 'Debug Log',
+    },
+  },
+  researcher: {
+    templates: ['microsoft', 'confluence', 'salesforce', 'custom'],
+    labels: {
+      microsoft: 'Research Notes',
+      confluence: 'Literature Review',
+      salesforce: 'Findings',
+      custom: 'Bibliography',
+    },
+  },
+  custom: {
+    templates: ['salesforce', 'microsoft', 'confluence', 'custom'],
+    labels: {
+      salesforce: 'Professional',
+      microsoft: 'Detailed',
+      confluence: 'Technical',
+      custom: 'Simple',
+    },
+  },
+};
 
 const generateArticle = (session: RecordingSession, template: KnowledgeArticle['template']): KnowledgeArticle => {
   const tabEvents = session.events.filter(e => e.type === 'tab');
@@ -41,8 +91,9 @@ const generateArticle = (session: RecordingSession, template: KnowledgeArticle['
   };
 };
 
-export const ArticleGenerator = ({ session, onClose }: ArticleGeneratorProps) => {
-  const [template, setTemplate] = useState<KnowledgeArticle['template']>('salesforce');
+export const ArticleGenerator = ({ session, profileType, onClose }: ArticleGeneratorProps) => {
+  const profileConfig = PROFILE_TEMPLATES[profileType];
+  const [template, setTemplate] = useState<KnowledgeArticle['template']>(profileConfig.templates[0]);
   const [article, setArticle] = useState<KnowledgeArticle | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -113,10 +164,11 @@ Generated on ${article.createdAt.toLocaleString()}
         <div className="p-6">
           <Tabs value={template} onValueChange={(v) => setTemplate(v as KnowledgeArticle['template'])}>
             <TabsList className="grid grid-cols-4 mb-6">
-              <TabsTrigger value="salesforce">Professional</TabsTrigger>
-              <TabsTrigger value="microsoft">Study Guide</TabsTrigger>
-              <TabsTrigger value="confluence">Dev Docs</TabsTrigger>
-              <TabsTrigger value="custom">Simple</TabsTrigger>
+              {profileConfig.templates.map((t) => (
+                <TabsTrigger key={t} value={t}>
+                  {profileConfig.labels[t]}
+                </TabsTrigger>
+              ))}
             </TabsList>
 
             <TabsContent value={template} className="mt-0">
