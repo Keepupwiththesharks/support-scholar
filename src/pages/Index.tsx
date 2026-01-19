@@ -11,8 +11,8 @@ import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { useRecording } from '@/hooks/useRecording';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useArticleLibrary } from '@/hooks/useArticleLibrary';
+import { useCustomProfiles, CustomProfile } from '@/hooks/useCustomProfiles';
 import { RecordingSession, UserProfileType } from '@/types';
-import { CustomProfile } from '@/hooks/useCustomProfiles';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Clock, History, FileText, Trash2, Sparkles, BookOpen, Zap, Shield, ArrowRight, Play, Users, Star, CheckCircle2 } from 'lucide-react';
@@ -112,8 +112,20 @@ const Index = () => {
   const [selectedCustomProfileId, setSelectedCustomProfileId] = useState<string | undefined>(undefined);
   const [activeCustomProfile, setActiveCustomProfile] = useState<CustomProfile | null>(null);
 
+  const { getDefaultProfile, getProfileById } = useCustomProfiles();
+
   // Get effective profile type for the recording
   const effectiveProfileType = activeCustomProfile ? activeCustomProfile.basedOn : profileType;
+
+  // Load default custom profile on startup
+  useEffect(() => {
+    const defaultProfile = getDefaultProfile();
+    if (defaultProfile) {
+      setSelectedCustomProfileId(defaultProfile.id);
+      setActiveCustomProfile(defaultProfile);
+      changeProfile('custom');
+    }
+  }, []); // Run only once on mount
 
   // Check if user has seen the tour
   useEffect(() => {
