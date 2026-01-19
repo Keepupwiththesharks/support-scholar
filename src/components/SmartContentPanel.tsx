@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp, GitMerge } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight, Eye, ChevronDown, ChevronUp, GitMerge, HelpCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -24,6 +24,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   DndContext,
   closestCenter,
@@ -1316,68 +1322,146 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     {/* Conflict Resolution Dialog */}
     <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
-        {/* Header with gradient */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent p-6 pb-4">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400/10 rounded-full blur-3xl" />
-          <div className="relative">
-            <DialogHeader className="space-y-2">
-              <DialogTitle className="flex items-center gap-3 text-xl">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                  <GitMerge className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <span className="font-semibold">Resolve Import Conflicts</span>
-                  <p className="text-sm font-normal text-muted-foreground mt-0.5">
-                    {pendingImport?.conflicts.length} preset{pendingImport?.conflicts.length !== 1 ? 's' : ''} need your attention
-                  </p>
-                </div>
-              </DialogTitle>
-            </DialogHeader>
+        <TooltipProvider delayDuration={300}>
+          {/* Header with gradient */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent p-6 pb-4">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400/10 rounded-full blur-3xl" />
+            <div className="relative">
+              <DialogHeader className="space-y-2">
+                <DialogTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-xl">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                      <GitMerge className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <span className="font-semibold">Resolve Import Conflicts</span>
+                      <p className="text-sm font-normal text-muted-foreground mt-0.5">
+                        {pendingImport?.conflicts.length} preset{pendingImport?.conflicts.length !== 1 ? 's' : ''} need your attention
+                      </p>
+                    </div>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                        <HelpCircle className="w-5 h-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-xs p-4 space-y-2">
+                      <p className="font-semibold text-sm">How Conflict Resolution Works</p>
+                      <div className="space-y-1.5 text-xs">
+                        <p className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded bg-amber-500/20 text-amber-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">1</span>
+                          <span>Review each conflicting preset below</span>
+                        </p>
+                        <p className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded bg-amber-500/20 text-amber-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">2</span>
+                          <span>Click "Compare" to see differences side-by-side</span>
+                        </p>
+                        <p className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded bg-amber-500/20 text-amber-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">3</span>
+                          <span>Choose an action for each conflict</span>
+                        </p>
+                        <p className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded bg-amber-500/20 text-amber-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">4</span>
+                          <span>Click "Apply & Import" when done</span>
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </DialogTitle>
+              </DialogHeader>
+            </div>
           </div>
-        </div>
-        
-        {/* Bulk actions bar */}
-        <div className="flex items-center gap-3 px-6 py-3 border-b bg-muted/30">
-          <span className="text-sm font-medium text-muted-foreground">Quick actions:</span>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => handleSetAllConflicts('overwrite')}
-              className="h-8 rounded-full px-4 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/30 transition-colors"
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
-              Overwrite All
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => handleSetAllConflicts('keep_both')}
-              className="h-8 rounded-full px-4 hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500/30 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5 mr-1.5" />
-              Keep All
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => handleSetAllConflicts('cherry_pick')}
-              className="h-8 rounded-full px-4 hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500/30 transition-colors"
-            >
-              <GitMerge className="w-3.5 h-3.5 mr-1.5" />
-              Cherry-Pick All
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => handleSetAllConflicts('skip')}
-              className="h-8 rounded-full px-4 hover:bg-muted transition-colors"
-            >
-              <X className="w-3.5 h-3.5 mr-1.5" />
-              Skip All
-            </Button>
+          
+          {/* Onboarding guide - shows first time */}
+          <motion.div 
+            initial={{ height: 'auto', opacity: 1 }}
+            className="px-6 py-3 bg-gradient-to-r from-blue-500/10 via-purple-500/5 to-transparent border-b"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <Info className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-blue-600 mb-1">Quick Guide</p>
+                <p className="text-xs text-muted-foreground">
+                  Choose how to handle each conflict: <strong>Overwrite</strong> replaces existing, <strong>Keep Both</strong> creates a copy, 
+                  <strong> Cherry-Pick</strong> lets you select individual items from both versions, or <strong>Skip</strong> to ignore.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+          
+          {/* Bulk actions bar */}
+          <div className="flex items-center gap-3 px-6 py-3 border-b bg-muted/30">
+            <span className="text-sm font-medium text-muted-foreground">Quick actions:</span>
+            <div className="flex gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleSetAllConflicts('overwrite')}
+                    className="h-8 rounded-full px-4 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/30 transition-colors"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
+                    Overwrite All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Replace all existing presets with imported versions</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleSetAllConflicts('keep_both')}
+                    className="h-8 rounded-full px-4 hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500/30 transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1.5" />
+                    Keep All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Keep existing and add imported as copies</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleSetAllConflicts('cherry_pick')}
+                    className="h-8 rounded-full px-4 hover:bg-purple-500/10 hover:text-purple-600 hover:border-purple-500/30 transition-colors"
+                  >
+                    <GitMerge className="w-3.5 h-3.5 mr-1.5" />
+                    Cherry-Pick All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Manually select items from both versions to merge</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleSetAllConflicts('skip')}
+                    className="h-8 rounded-full px-4 hover:bg-muted transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1.5" />
+                    Skip All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Ignore all conflicts and keep existing presets</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
-        </div>
         
         {/* Conflicts list */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
@@ -1435,58 +1519,87 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
                     </Button>
                   </div>
                   
-                  {/* Action buttons */}
+                  {/* Action buttons with tooltips */}
                   <div className="flex gap-2 mt-4">
-                    <Button
-                      variant={resolution === 'overwrite' ? 'default' : 'outline'}
-                      size="sm"
-                      className={cn(
-                        "h-9 rounded-xl flex-1 transition-all",
-                        resolution === 'overwrite' 
-                          ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20" 
-                          : "hover:border-amber-500/50 hover:bg-amber-500/10"
-                      )}
-                      onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
-                    >
-                      <ArrowLeftRight className="w-4 h-4 mr-2" />
-                      Overwrite
-                    </Button>
-                    <Button
-                      variant={resolution === 'keep_both' ? 'default' : 'outline'}
-                      size="sm"
-                      className={cn(
-                        "h-9 rounded-xl flex-1 transition-all",
-                        resolution === 'keep_both' 
-                          ? "bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20" 
-                          : "hover:border-blue-500/50 hover:bg-blue-500/10"
-                      )}
-                      onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Keep Both
-                    </Button>
-                    <Button
-                      variant={resolution === 'cherry_pick' ? 'default' : 'outline'}
-                      size="sm"
-                      className={cn(
-                        "h-9 rounded-xl flex-1 transition-all",
-                        resolution === 'cherry_pick' 
-                          ? "bg-purple-500 hover:bg-purple-600 text-white shadow-md shadow-purple-500/20" 
-                          : "hover:border-purple-500/50 hover:bg-purple-500/10"
-                      )}
-                      onClick={() => initializeCherryPick(conflict)}
-                    >
-                      <GitMerge className="w-4 h-4 mr-2" />
-                      Cherry-Pick
-                    </Button>
-                    <Button
-                      variant={resolution === 'skip' ? 'secondary' : 'outline'}
-                      size="sm"
-                      className="h-9 rounded-xl px-4 transition-all"
-                      onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={resolution === 'overwrite' ? 'default' : 'outline'}
+                          size="sm"
+                          className={cn(
+                            "h-9 rounded-xl flex-1 transition-all",
+                            resolution === 'overwrite' 
+                              ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20" 
+                              : "hover:border-amber-500/50 hover:bg-amber-500/10"
+                          )}
+                          onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
+                        >
+                          <ArrowLeftRight className="w-4 h-4 mr-2" />
+                          Overwrite
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="text-xs">Replace existing preset with imported version</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={resolution === 'keep_both' ? 'default' : 'outline'}
+                          size="sm"
+                          className={cn(
+                            "h-9 rounded-xl flex-1 transition-all",
+                            resolution === 'keep_both' 
+                              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20" 
+                              : "hover:border-blue-500/50 hover:bg-blue-500/10"
+                          )}
+                          onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Keep Both
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="text-xs">Keep existing and add imported as a new copy</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={resolution === 'cherry_pick' ? 'default' : 'outline'}
+                          size="sm"
+                          className={cn(
+                            "h-9 rounded-xl flex-1 transition-all",
+                            resolution === 'cherry_pick' 
+                              ? "bg-purple-500 hover:bg-purple-600 text-white shadow-md shadow-purple-500/20" 
+                              : "hover:border-purple-500/50 hover:bg-purple-500/10"
+                          )}
+                          onClick={() => initializeCherryPick(conflict)}
+                        >
+                          <GitMerge className="w-4 h-4 mr-2" />
+                          Cherry-Pick
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <p className="text-xs font-medium mb-1">Advanced Merge</p>
+                        <p className="text-xs text-muted-foreground">Select specific items from both presets to create a custom merged version</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={resolution === 'skip' ? 'secondary' : 'outline'}
+                          size="sm"
+                          className="h-9 rounded-xl px-4 transition-all"
+                          onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="text-xs">Skip this conflict and keep existing preset</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
                 
@@ -2031,6 +2144,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
             </Button>
           </div>
         </div>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
     </>
