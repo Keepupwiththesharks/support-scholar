@@ -4,12 +4,21 @@ import { RecordingControls } from '@/components/RecordingControls';
 import { ActivityTimeline } from '@/components/ActivityTimeline';
 import { SessionCard } from '@/components/SessionCard';
 import { ArticleGenerator } from '@/components/ArticleGenerator';
+import { ProfileSelector } from '@/components/ProfileSelector';
 import { useRecording } from '@/hooks/useRecording';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { RecordingSession } from '@/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, History, FileText } from 'lucide-react';
 
 const Index = () => {
+  const {
+    profileType,
+    customPreferences,
+    changeProfile,
+    updateCustomPreferences,
+  } = useUserProfile();
+
   const {
     status,
     currentSession,
@@ -20,7 +29,7 @@ const Index = () => {
     resumeRecording,
     stopRecording,
     addNote,
-  } = useRecording();
+  } = useRecording({ profileType, customPreferences });
 
   const [selectedSession, setSelectedSession] = useState<RecordingSession | null>(null);
 
@@ -37,6 +46,15 @@ const Index = () => {
                 <Clock className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-semibold">Recording Session</h2>
               </div>
+              
+              <ProfileSelector
+                selectedProfile={profileType}
+                onProfileChange={changeProfile}
+                customPreferences={customPreferences}
+                onPreferencesChange={updateCustomPreferences}
+              />
+
+              <div className="my-6 border-t" />
               
               <RecordingControls
                 status={status}
