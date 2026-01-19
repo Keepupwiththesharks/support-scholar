@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FileText, Copy, Download, Check, X, Sparkles, Save, FileJson, FileCode, FileType, Brain, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle } from '@/types';
+import { RecordingSession, KnowledgeArticle, UserProfileType, SavedArticle, OutputTemplateType } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { ArticleVisuals } from './ArticleVisuals';
@@ -10,6 +10,7 @@ import { SmartContentPanel } from './SmartContentPanel';
 import { TemplateSectionDialog } from './TemplateSectionEditor';
 import { useTemplateSections } from '@/hooks/useTemplateSections';
 import { GeneratedContent } from '@/lib/contentGenerationEngine';
+import { AVAILABLE_TEMPLATES } from '@/hooks/useCustomProfiles';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,53 +27,34 @@ interface ArticleGeneratorProps {
   customOutputTemplates?: string[];
 }
 
-// Profile-specific template configurations
-const PROFILE_TEMPLATES: Record<UserProfileType, { templates: KnowledgeArticle['template'][]; labels: Record<string, string> }> = {
-  support: {
-    templates: ['salesforce', 'microsoft', 'confluence', 'custom'],
-    labels: {
-      salesforce: 'Salesforce KB',
-      microsoft: 'Microsoft Docs',
-      confluence: 'Confluence',
-      custom: 'Ticket Summary',
-    },
-  },
-  student: {
-    templates: ['microsoft', 'confluence', 'custom', 'salesforce'],
-    labels: {
-      microsoft: 'Study Guide',
-      confluence: 'Lecture Notes',
-      custom: 'Flashcards',
-      salesforce: 'Summary',
-    },
-  },
-  developer: {
-    templates: ['confluence', 'microsoft', 'custom', 'salesforce'],
-    labels: {
-      confluence: 'Dev Docs',
-      microsoft: 'README',
-      custom: 'Changelog',
-      salesforce: 'Debug Log',
-    },
-  },
-  researcher: {
-    templates: ['microsoft', 'confluence', 'salesforce', 'custom'],
-    labels: {
-      microsoft: 'Research Notes',
-      confluence: 'Literature Review',
-      salesforce: 'Findings',
-      custom: 'Bibliography',
-    },
-  },
-  custom: {
-    templates: ['salesforce', 'microsoft', 'confluence', 'custom'],
-    labels: {
-      salesforce: 'Professional',
-      microsoft: 'Detailed',
-      confluence: 'Technical',
-      custom: 'Simple',
-    },
-  },
+// Template labels for display
+const TEMPLATE_LABELS: Record<OutputTemplateType, string> = {
+  'study-guide': 'Study Guide',
+  'flashcards': 'Flashcards',
+  'lecture-notes': 'Lecture Notes',
+  'summary': 'Summary',
+  'dev-docs': 'Dev Documentation',
+  'changelog': 'Changelog',
+  'debug-log': 'Debug Log',
+  'readme': 'README',
+  'knowledge-base': 'Knowledge Base',
+  'ticket-summary': 'Ticket Summary',
+  'runbook': 'Runbook',
+  'research-notes': 'Research Notes',
+  'bibliography': 'Bibliography',
+  'findings': 'Findings Report',
+  'meeting-notes': 'Meeting Notes',
+  'simple': 'Simple',
+  'detailed': 'Detailed',
+};
+
+// Default templates for each profile type (aligned with profile purposes)
+const PROFILE_DEFAULT_TEMPLATES: Record<UserProfileType, OutputTemplateType[]> = {
+  student: ['study-guide', 'flashcards', 'lecture-notes', 'summary'],
+  developer: ['dev-docs', 'readme', 'changelog', 'debug-log'],
+  support: ['knowledge-base', 'ticket-summary', 'runbook', 'meeting-notes'],
+  researcher: ['research-notes', 'findings', 'bibliography', 'detailed'],
+  custom: ['simple', 'detailed', 'summary', 'meeting-notes'],
 };
 
 // Export format configurations per profile
@@ -80,8 +62,8 @@ const EXPORT_FORMATS: Record<UserProfileType, { formats: string[]; labels: Recor
   support: {
     formats: ['json', 'markdown', 'html'],
     labels: {
-      json: 'Salesforce Import (JSON)',
-      markdown: 'Confluence (Markdown)',
+      json: 'System Import (JSON)',
+      markdown: 'Documentation (Markdown)',
       html: 'Web Format (HTML)',
     },
     icons: {
@@ -144,81 +126,15 @@ const EXPORT_FORMATS: Record<UserProfileType, { formats: string[]; labels: Recor
   },
 };
 
-// Helper functions to map custom template IDs to the article generator's template structure
-const TEMPLATE_ID_TO_TYPE: Record<string, KnowledgeArticle['template']> = {
-  'study-guide': 'microsoft',
-  'flashcards': 'custom',
-  'lecture-notes': 'confluence',
-  'summary': 'salesforce',
-  'dev-docs': 'confluence',
-  'changelog': 'custom',
-  'debug-log': 'salesforce',
-  'readme': 'microsoft',
-  'knowledge-base': 'salesforce',
-  'ticket-summary': 'custom',
-  'runbook': 'confluence',
-  'research-notes': 'microsoft',
-  'bibliography': 'custom',
-  'findings': 'salesforce',
-  'meeting-notes': 'confluence',
-  'simple': 'custom',
-  'detailed': 'microsoft',
-};
-
-const TEMPLATE_ID_LABELS: Record<string, string> = {
-  'study-guide': 'Study Guide',
-  'flashcards': 'Flashcards',
-  'lecture-notes': 'Lecture Notes',
-  'summary': 'Summary',
-  'dev-docs': 'Dev Docs',
-  'changelog': 'Changelog',
-  'debug-log': 'Debug Log',
-  'readme': 'README',
-  'knowledge-base': 'Knowledge Base',
-  'ticket-summary': 'Ticket Summary',
-  'runbook': 'Runbook',
-  'research-notes': 'Research Notes',
-  'bibliography': 'Bibliography',
-  'findings': 'Findings',
-  'meeting-notes': 'Meeting Notes',
-  'simple': 'Simple',
-  'detailed': 'Detailed',
-};
-
-const getTemplatesFromCustomList = (templateIds: string[]): KnowledgeArticle['template'][] => {
-  const mapped = templateIds
-    .map(id => TEMPLATE_ID_TO_TYPE[id])
-    .filter((t): t is KnowledgeArticle['template'] => t !== undefined);
-  // Ensure uniqueness and at least one template
-  const unique = [...new Set(mapped)];
-  return unique.length > 0 ? unique : ['custom'];
-};
-
-const getLabelsFromCustomList = (templateIds: string[]): Record<string, string> => {
-  const labels: Record<string, string> = {};
-  templateIds.forEach(id => {
-    const type = TEMPLATE_ID_TO_TYPE[id];
-    if (type && TEMPLATE_ID_LABELS[id]) {
-      labels[type] = TEMPLATE_ID_LABELS[id];
-    }
-  });
-  // Ensure we have at least one
-  if (Object.keys(labels).length === 0) {
-    labels['custom'] = 'Simple';
-  }
-  return labels;
-};
-
 // Template-specific content structure interfaces
 interface TemplateContent {
   sections: { label: string; content: string | string[] }[];
 }
 
-// Generate template-specific content based on profile, template type, and custom sections
+// Generate template-specific content based on template type
 const generateTemplateContent = (
   session: RecordingSession, 
-  template: KnowledgeArticle['template'],
-  profileType: UserProfileType,
+  template: OutputTemplateType,
   enabledSectionLabels?: string[]
 ): TemplateContent => {
   const tabEvents = session.events.filter(e => e.type === 'tab');
@@ -226,7 +142,6 @@ const generateTemplateContent = (
   const noteEvents = session.events.filter(e => e.type === 'note');
   const appEvents = session.events.filter(e => e.type === 'app');
   
-  // Extract rich content from events
   const codeSnippets = session.events
     .filter(e => e.content?.code)
     .map(e => e.content!.code!)
@@ -244,249 +159,204 @@ const generateTemplateContent = (
   const uniqueSources = [...new Set([...tabEvents, ...appEvents].map(e => e.source))].join(', ') || 'various tools';
   const duration = Math.floor(session.events.length / 2);
 
-  // Support Engineer Templates
-  if (profileType === 'support') {
-    switch (template) {
-      case 'salesforce':
-        return {
-          sections: [
-            { label: 'Case Number', content: session.ticketId || `CASE-${Date.now().toString().slice(-6)}` },
-            { label: 'Environment', content: `Platform: Web Application | Tools: ${uniqueSources}` },
-            { label: 'Customer Impact', content: textContent[0] || 'Customer unable to proceed with workflow' },
-            { label: 'Root Cause', content: textContent[1] || actionEvents[0]?.description || 'Issue identified during troubleshooting session' },
-            { label: 'Resolution Steps', content: actionEvents.slice(0, 5).map(e => e.content?.text || e.title) },
-            { label: 'Technical Details', content: codeSnippets.length > 0 ? codeSnippets : ['No code changes required'] },
-            { label: 'Verification', content: 'Issue resolved and verified with customer' },
-            { label: 'Time to Resolution', content: `${duration} minutes` },
-            { label: 'Key Observations', content: highlights.length > 0 ? highlights : ['Standard troubleshooting completed'] },
-            { label: 'Knowledge Tags', content: session.tags.join(', ') || 'support, troubleshooting' },
-          ],
-        };
-      case 'microsoft':
-        return {
-          sections: [
-            { label: 'Article Title', content: `Troubleshooting: ${session.name}` },
-            { label: 'Applies To', content: uniqueSources },
-            { label: 'Symptoms', content: textContent[0] || 'User reports issue with application functionality' },
-            { label: 'Cause', content: textContent[1] || actionEvents[0]?.description || 'Configuration or user error' },
-            { label: 'Resolution', content: actionEvents.slice(0, 4).map(e => e.content?.text || e.title) },
-            { label: 'Technical Notes', content: codeSnippets.length > 0 ? codeSnippets : ['No code modifications needed'] },
-            { label: 'More Information', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
-            { label: 'Keywords', content: session.tags.join(', ') },
-          ],
-        };
-      case 'confluence':
-        return {
-          sections: [
-            { label: 'Overview', content: `Technical documentation for ${session.name}` },
-            { label: 'Prerequisites', content: `Access to: ${uniqueSources}` },
-            { label: 'Procedure', content: actionEvents.map(e => e.content?.text || e.title) },
-            { label: 'Code References', content: codeSnippets.length > 0 ? codeSnippets : ['No code snippets captured'] },
-            { label: 'Troubleshooting Tips', content: noteEvents.map(e => e.description) },
-            { label: 'Key Points', content: highlights.length > 0 ? highlights : textContent.slice(0, 3) },
-            { label: 'Related Pages', content: tabEvents.slice(0, 3).map(e => e.title) },
-          ],
-        };
-      default:
-        return {
-          sections: [
-            { label: 'Ticket Summary', content: session.name },
-            { label: 'Duration', content: `${duration} minutes` },
-            { label: 'Issue Description', content: textContent[0] || 'Support case handled' },
-            { label: 'Actions Taken', content: actionEvents.slice(0, 5).map(e => e.content?.text || e.title) },
-            { label: 'Outcome', content: 'Issue resolved successfully' },
-            { label: 'Notes', content: noteEvents.map(e => e.description) },
-          ],
-        };
-    }
-  }
-
-  // Student Templates
-  if (profileType === 'student') {
-    switch (template) {
-      case 'microsoft': // Study Guide
-        return {
-          sections: [
-            { label: 'Topic', content: session.name },
-            { label: 'Key Concepts', content: textContent.slice(0, 4).map(t => `• ${t}`) },
-            { label: 'Important Definitions', content: actionEvents.slice(0, 3).map(e => e.content?.text || e.description || e.title) },
-            { label: 'Code Examples', content: codeSnippets.length > 0 ? codeSnippets : ['No code examples captured'] },
-            { label: 'Examples & Applications', content: noteEvents.map(e => e.description) },
-            { label: 'Key Highlights', content: highlights.length > 0 ? highlights : ['Review main concepts'] },
-            { label: 'Study Tips', content: ['Review key concepts daily', 'Practice with examples', 'Create flashcards for definitions'] },
-            { label: 'Resources', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
-          ],
-        };
-      case 'confluence': // Lecture Notes
-        return {
-          sections: [
-            { label: 'Lecture Title', content: session.name },
-            { label: 'Date', content: new Date().toLocaleDateString() },
-            { label: 'Main Points', content: textContent.slice(0, 5) },
-            { label: 'Detailed Notes', content: actionEvents.map(e => e.content?.text || e.description || e.title) },
-            { label: 'Code/Formulas', content: codeSnippets.length > 0 ? codeSnippets : ['No code or formulas recorded'] },
-            { label: 'Key Takeaways', content: highlights.length > 0 ? highlights : tabEvents.slice(0, 3).map(e => e.title) },
-            { label: 'Questions to Review', content: noteEvents.map(e => `Q: ${e.description}`) },
-            { label: 'Next Steps', content: ['Review notes before next class', 'Complete assigned readings'] },
-          ],
-        };
-      case 'custom': // Flashcards
-        return {
-          sections: [
-            { label: 'Deck Name', content: session.name },
-            { label: 'Concept Cards', content: textContent.slice(0, 6).map((t, i) => `Card ${i + 1}: ${t}`) },
-            { label: 'Key Terms', content: actionEvents.slice(0, 4).map(e => `Term: ${e.content?.text || e.title}`) },
-            { label: 'Code Snippets', content: codeSnippets.length > 0 ? codeSnippets.map((c, i) => `Snippet ${i + 1}:\n${c}`) : ['No code to memorize'] },
-            { label: 'Practice Questions', content: [
-              'What is the main concept discussed?',
-              'How does this relate to previous topics?',
-              'Can you explain this in your own words?',
-            ]},
-          ],
-        };
-      default: // Summary
-        return {
-          sections: [
-            { label: 'Session Summary', content: session.name },
-            { label: 'Topics Covered', content: textContent.slice(0, 4) },
-            { label: 'Key Takeaways', content: highlights.length > 0 ? highlights : actionEvents.slice(0, 3).map(e => e.title) },
-            { label: 'Duration', content: `${duration} minutes of study` },
-          ],
-        };
-    }
-  }
-
-  // Developer Templates
-  if (profileType === 'developer') {
-    switch (template) {
-      case 'confluence': // Dev Docs
-        return {
-          sections: [
-            { label: 'Feature/Module', content: session.name },
-            { label: 'Overview', content: textContent[0] || `Development session covering ${uniqueSources}` },
-            { label: 'Architecture', content: 'Component-based architecture with separation of concerns' },
-            { label: 'Implementation Details', content: actionEvents.map(e => e.content?.text || e.title) },
-            { label: 'Code Snippets', content: codeSnippets.length > 0 ? codeSnippets : ['No code captured'] },
-            { label: 'Code References', content: tabEvents.filter(e => e.source === 'VS Code' || e.source === 'GitHub').map(e => e.title) },
-            { label: 'Dependencies', content: ['React', 'TypeScript', 'Tailwind CSS'] },
-            { label: 'Key Decisions', content: highlights.length > 0 ? highlights : ['Standard implementation approach'] },
-            { label: 'Testing Notes', content: noteEvents.map(e => e.description) },
-          ],
-        };
-      case 'microsoft': // README
-        return {
-          sections: [
-            { label: 'Project Name', content: session.name },
-            { label: 'Description', content: textContent[0] || `Documentation generated from ${duration} minute development session` },
-            { label: 'Installation', content: ['npm install', 'npm run dev'] },
-            { label: 'Usage', content: actionEvents.slice(0, 3).map(e => e.content?.text || e.title) },
-            { label: 'Code Examples', content: codeSnippets.length > 0 ? codeSnippets : ['See source files'] },
-            { label: 'Configuration', content: 'See .env.example for environment variables' },
-            { label: 'Contributing', content: 'Submit PRs with clear descriptions and tests' },
-          ],
-        };
-      case 'custom': // Changelog
-        return {
-          sections: [
-            { label: 'Version', content: `v${new Date().toISOString().slice(0, 10).replace(/-/g, '.')}` },
-            { label: 'Date', content: new Date().toLocaleDateString() },
-            { label: 'Changes', content: actionEvents.map(e => `• ${e.content?.text || e.title}`) },
-            { label: 'Code Changes', content: codeSnippets.length > 0 ? codeSnippets : ['Minor updates'] },
-            { label: 'Files Modified', content: tabEvents.filter(e => e.source === 'VS Code').slice(0, 5).map(e => e.title) },
-            { label: 'Notes', content: noteEvents.map(e => e.description) },
-          ],
-        };
-      default: // Debug Log
-        return {
-          sections: [
-            { label: 'Debug Session', content: session.name },
-            { label: 'Timestamp', content: new Date().toISOString() },
-            { label: 'Issue', content: textContent[0] || actionEvents[0]?.description || 'Debugging session' },
-            { label: 'Investigation Steps', content: actionEvents.map(e => e.content?.text || e.title) },
-            { label: 'Code Examined', content: codeSnippets.length > 0 ? codeSnippets : ['See console logs'] },
-            { label: 'Console Output', content: noteEvents.map(e => `> ${e.description}`) },
-            { label: 'Resolution', content: 'Issue identified and resolved' },
-          ],
-        };
-    }
-  }
-
-  // Researcher Templates
-  if (profileType === 'researcher') {
-    switch (template) {
-      case 'microsoft': // Research Notes
-        return {
-          sections: [
-            { label: 'Research Topic', content: session.name },
-            { label: 'Hypothesis', content: textContent[0] || 'Initial research question and assumptions' },
-            { label: 'Sources Reviewed', content: tabEvents.slice(0, 5).map(e => e.title) },
-            { label: 'Key Findings', content: textContent.slice(1, 5) },
-            { label: 'Data/Evidence', content: codeSnippets.length > 0 ? codeSnippets : highlights },
-            { label: 'Observations', content: noteEvents.map(e => e.description) },
-            { label: 'Questions for Further Research', content: ['What are the implications?', 'How does this connect to existing literature?'] },
-          ],
-        };
-      case 'confluence': // Literature Review
-        return {
-          sections: [
-            { label: 'Review Title', content: session.name },
-            { label: 'Scope', content: `Analysis of ${tabEvents.length} sources` },
-            { label: 'Sources', content: tabEvents.map(e => `• ${e.title}${e.url ? ` (${e.url})` : ''}`) },
-            { label: 'Key Excerpts', content: textContent.slice(0, 4) },
-            { label: 'Themes Identified', content: highlights.length > 0 ? highlights : actionEvents.slice(0, 4).map(e => e.title) },
-            { label: 'Gaps in Literature', content: noteEvents.map(e => e.description) },
-            { label: 'Conclusions', content: 'Further research needed in identified areas' },
-          ],
-        };
-      case 'salesforce': // Findings
-        return {
-          sections: [
-            { label: 'Study', content: session.name },
-            { label: 'Methodology', content: `Qualitative analysis of ${uniqueSources}` },
-            { label: 'Data Points', content: `${session.events.length} observations recorded` },
-            { label: 'Primary Findings', content: textContent.slice(0, 4) },
-            { label: 'Data/Code', content: codeSnippets.length > 0 ? codeSnippets : ['Qualitative data collected'] },
-            { label: 'Supporting Evidence', content: highlights.length > 0 ? highlights : noteEvents.map(e => e.description) },
-            { label: 'Implications', content: 'Findings suggest areas for continued investigation' },
-          ],
-        };
-      default: // Bibliography
-        return {
-          sections: [
-            { label: 'Bibliography', content: session.name },
-            { label: 'Sources', content: tabEvents.map(e => `${e.title}${e.url ? `. Retrieved from ${e.url}` : ''}`) },
-            { label: 'Access Date', content: new Date().toLocaleDateString() },
-            { label: 'Notes', content: noteEvents.map(e => e.description) },
-          ],
-        };
-    }
-  }
-
-  // Custom/Default Templates
-  const defaultContent: TemplateContent = {
-    sections: [
-      { label: 'Title', content: session.name },
-      { label: 'Summary', content: textContent[0] || `${duration} minute session across ${uniqueSources}` },
-      { label: 'Activities', content: actionEvents.map(e => e.content?.text || e.title) },
-      { label: 'Content Captured', content: codeSnippets.length > 0 ? codeSnippets : textContent.slice(0, 3) },
-      { label: 'Resources', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
-      { label: 'Notes', content: noteEvents.map(e => e.description) },
-    ],
+  // Template-specific content generation
+  const templateSections: Record<OutputTemplateType, TemplateContent> = {
+    'study-guide': {
+      sections: [
+        { label: 'Topic', content: session.name },
+        { label: 'Key Concepts', content: textContent.slice(0, 4).map(t => `• ${t}`) },
+        { label: 'Important Definitions', content: actionEvents.slice(0, 3).map(e => e.content?.text || e.title) },
+        { label: 'Code Examples', content: codeSnippets.length > 0 ? codeSnippets : ['No code examples captured'] },
+        { label: 'Examples & Applications', content: noteEvents.map(e => e.description) },
+        { label: 'Key Highlights', content: highlights.length > 0 ? highlights : ['Review main concepts'] },
+        { label: 'Study Tips', content: ['Review key concepts daily', 'Practice with examples', 'Create flashcards'] },
+        { label: 'Resources', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
+      ],
+    },
+    'flashcards': {
+      sections: [
+        { label: 'Deck Name', content: session.name },
+        { label: 'Concept Cards', content: textContent.slice(0, 6).map((t, i) => `Card ${i + 1}: ${t}`) },
+        { label: 'Key Terms', content: actionEvents.slice(0, 4).map(e => `Term: ${e.content?.text || e.title}`) },
+        { label: 'Code Snippets', content: codeSnippets.length > 0 ? codeSnippets.map((c, i) => `Snippet ${i + 1}:\n${c}`) : ['No code to memorize'] },
+        { label: 'Practice Questions', content: ['What is the main concept?', 'How does this relate to previous topics?', 'Explain in your own words'] },
+      ],
+    },
+    'lecture-notes': {
+      sections: [
+        { label: 'Lecture Title', content: session.name },
+        { label: 'Date', content: new Date().toLocaleDateString() },
+        { label: 'Main Points', content: textContent.slice(0, 5) },
+        { label: 'Detailed Notes', content: actionEvents.map(e => e.content?.text || e.title) },
+        { label: 'Code/Formulas', content: codeSnippets.length > 0 ? codeSnippets : ['No code or formulas recorded'] },
+        { label: 'Key Takeaways', content: highlights.length > 0 ? highlights : tabEvents.slice(0, 3).map(e => e.title) },
+        { label: 'Questions to Review', content: noteEvents.map(e => `Q: ${e.description}`) },
+        { label: 'Next Steps', content: ['Review notes', 'Complete assigned readings'] },
+      ],
+    },
+    'summary': {
+      sections: [
+        { label: 'Session Summary', content: session.name },
+        { label: 'Duration', content: `${duration} minutes` },
+        { label: 'Topics Covered', content: textContent.slice(0, 4) },
+        { label: 'Key Takeaways', content: highlights.length > 0 ? highlights : actionEvents.slice(0, 3).map(e => e.title) },
+        { label: 'Notes', content: noteEvents.map(e => e.description) },
+      ],
+    },
+    'dev-docs': {
+      sections: [
+        { label: 'Feature/Module', content: session.name },
+        { label: 'Overview', content: textContent[0] || `Development session covering ${uniqueSources}` },
+        { label: 'Architecture', content: 'Component-based architecture with separation of concerns' },
+        { label: 'Implementation Details', content: actionEvents.map(e => e.content?.text || e.title) },
+        { label: 'Code Snippets', content: codeSnippets.length > 0 ? codeSnippets : ['No code captured'] },
+        { label: 'Dependencies', content: ['React', 'TypeScript', 'Tailwind CSS'] },
+        { label: 'Key Decisions', content: highlights.length > 0 ? highlights : ['Standard implementation approach'] },
+        { label: 'Testing Notes', content: noteEvents.map(e => e.description) },
+      ],
+    },
+    'readme': {
+      sections: [
+        { label: 'Project Name', content: session.name },
+        { label: 'Description', content: textContent[0] || `Documentation from ${duration} minute session` },
+        { label: 'Installation', content: ['npm install', 'npm run dev'] },
+        { label: 'Usage', content: actionEvents.slice(0, 3).map(e => e.content?.text || e.title) },
+        { label: 'Code Examples', content: codeSnippets.length > 0 ? codeSnippets : ['See source files'] },
+        { label: 'Configuration', content: 'See .env.example for environment variables' },
+        { label: 'Contributing', content: 'Submit PRs with clear descriptions and tests' },
+      ],
+    },
+    'changelog': {
+      sections: [
+        { label: 'Version', content: `v${new Date().toISOString().slice(0, 10).replace(/-/g, '.')}` },
+        { label: 'Date', content: new Date().toLocaleDateString() },
+        { label: 'Changes', content: actionEvents.map(e => `• ${e.content?.text || e.title}`) },
+        { label: 'Code Changes', content: codeSnippets.length > 0 ? codeSnippets : ['Minor updates'] },
+        { label: 'Files Modified', content: tabEvents.filter(e => e.source === 'VS Code').slice(0, 5).map(e => e.title) },
+        { label: 'Notes', content: noteEvents.map(e => e.description) },
+      ],
+    },
+    'debug-log': {
+      sections: [
+        { label: 'Debug Session', content: session.name },
+        { label: 'Timestamp', content: new Date().toISOString() },
+        { label: 'Issue', content: textContent[0] || actionEvents[0]?.description || 'Debugging session' },
+        { label: 'Investigation Steps', content: actionEvents.map(e => e.content?.text || e.title) },
+        { label: 'Code Examined', content: codeSnippets.length > 0 ? codeSnippets : ['See console logs'] },
+        { label: 'Console Output', content: noteEvents.map(e => `> ${e.description}`) },
+        { label: 'Resolution', content: 'Issue identified and resolved' },
+      ],
+    },
+    'knowledge-base': {
+      sections: [
+        { label: 'Article Title', content: session.name },
+        { label: 'Environment', content: `Platform: Web Application | Tools: ${uniqueSources}` },
+        { label: 'Problem Description', content: textContent[0] || 'Issue reported by user' },
+        { label: 'Root Cause', content: textContent[1] || actionEvents[0]?.description || 'Issue identified' },
+        { label: 'Resolution Steps', content: actionEvents.slice(0, 5).map(e => e.content?.text || e.title) },
+        { label: 'Technical Details', content: codeSnippets.length > 0 ? codeSnippets : ['No code changes required'] },
+        { label: 'Verification', content: 'Issue resolved and verified' },
+        { label: 'Tags', content: session.tags.join(', ') || 'support, troubleshooting' },
+      ],
+    },
+    'ticket-summary': {
+      sections: [
+        { label: 'Ticket ID', content: session.ticketId || `TICKET-${Date.now().toString().slice(-6)}` },
+        { label: 'Duration', content: `${duration} minutes` },
+        { label: 'Issue Description', content: textContent[0] || 'Support case handled' },
+        { label: 'Actions Taken', content: actionEvents.slice(0, 5).map(e => e.content?.text || e.title) },
+        { label: 'Outcome', content: 'Issue resolved successfully' },
+        { label: 'Notes', content: noteEvents.map(e => e.description) },
+      ],
+    },
+    'runbook': {
+      sections: [
+        { label: 'Procedure Title', content: session.name },
+        { label: 'Prerequisites', content: `Access to: ${uniqueSources}` },
+        { label: 'Steps', content: actionEvents.map(e => e.content?.text || e.title) },
+        { label: 'Code References', content: codeSnippets.length > 0 ? codeSnippets : ['No code snippets'] },
+        { label: 'Troubleshooting Tips', content: noteEvents.map(e => e.description) },
+        { label: 'Key Points', content: highlights.length > 0 ? highlights : textContent.slice(0, 3) },
+        { label: 'Related Pages', content: tabEvents.slice(0, 3).map(e => e.title) },
+      ],
+    },
+    'research-notes': {
+      sections: [
+        { label: 'Research Topic', content: session.name },
+        { label: 'Hypothesis', content: textContent[0] || 'Initial research question' },
+        { label: 'Sources Reviewed', content: tabEvents.slice(0, 5).map(e => e.title) },
+        { label: 'Key Findings', content: textContent.slice(1, 5) },
+        { label: 'Data/Evidence', content: codeSnippets.length > 0 ? codeSnippets : highlights },
+        { label: 'Observations', content: noteEvents.map(e => e.description) },
+        { label: 'Further Research', content: ['What are the implications?', 'How does this connect to existing literature?'] },
+      ],
+    },
+    'bibliography': {
+      sections: [
+        { label: 'Bibliography', content: session.name },
+        { label: 'Sources', content: tabEvents.map(e => `${e.title}${e.url ? `. Retrieved from ${e.url}` : ''}`) },
+        { label: 'Access Date', content: new Date().toLocaleDateString() },
+        { label: 'Notes', content: noteEvents.map(e => e.description) },
+      ],
+    },
+    'findings': {
+      sections: [
+        { label: 'Study', content: session.name },
+        { label: 'Methodology', content: `Qualitative analysis of ${uniqueSources}` },
+        { label: 'Data Points', content: `${session.events.length} observations recorded` },
+        { label: 'Primary Findings', content: textContent.slice(0, 4) },
+        { label: 'Supporting Evidence', content: highlights.length > 0 ? highlights : noteEvents.map(e => e.description) },
+        { label: 'Implications', content: 'Findings suggest areas for continued investigation' },
+      ],
+    },
+    'meeting-notes': {
+      sections: [
+        { label: 'Meeting Title', content: session.name },
+        { label: 'Date', content: new Date().toLocaleDateString() },
+        { label: 'Duration', content: `${duration} minutes` },
+        { label: 'Discussion Points', content: textContent.slice(0, 5) },
+        { label: 'Decisions Made', content: actionEvents.map(e => e.content?.text || e.title) },
+        { label: 'Action Items', content: noteEvents.map(e => e.description) },
+        { label: 'Next Steps', content: highlights.length > 0 ? highlights : ['Follow up on action items'] },
+      ],
+    },
+    'simple': {
+      sections: [
+        { label: 'Title', content: session.name },
+        { label: 'Summary', content: textContent[0] || `${duration} minute session` },
+        { label: 'Key Points', content: highlights.length > 0 ? highlights : actionEvents.slice(0, 3).map(e => e.title) },
+        { label: 'Notes', content: noteEvents.map(e => e.description) },
+      ],
+    },
+    'detailed': {
+      sections: [
+        { label: 'Title', content: session.name },
+        { label: 'Overview', content: textContent[0] || `${duration} minute session across ${uniqueSources}` },
+        { label: 'Activities', content: actionEvents.map(e => e.content?.text || e.title) },
+        { label: 'Content Captured', content: codeSnippets.length > 0 ? codeSnippets : textContent.slice(0, 3) },
+        { label: 'Key Highlights', content: highlights },
+        { label: 'Resources', content: tabEvents.slice(0, 3).map(e => e.url || e.title) },
+        { label: 'Notes', content: noteEvents.map(e => e.description) },
+        { label: 'Tags', content: session.tags.join(', ') },
+      ],
+    },
   };
+
+  const content = templateSections[template] || templateSections['simple'];
 
   // Filter sections based on enabled labels if provided
   if (enabledSectionLabels && enabledSectionLabels.length > 0) {
     return {
-      sections: defaultContent.sections
+      sections: content.sections
         .filter(s => enabledSectionLabels.includes(s.label))
         .sort((a, b) => enabledSectionLabels.indexOf(a.label) - enabledSectionLabels.indexOf(b.label)),
     };
   }
 
-  return defaultContent;
+  return content;
 };
 
-const generateArticle = (session: RecordingSession, template: KnowledgeArticle['template']): KnowledgeArticle => {
+const generateArticle = (session: RecordingSession, template: OutputTemplateType): KnowledgeArticle => {
   const tabEvents = session.events.filter(e => e.type === 'tab');
   const sessionName = session.ticketId || 'Session';
   const uniqueSources = [...new Set(session.events.map(e => e.source))].join(', ') || 'various tools';
@@ -621,20 +491,17 @@ export const ArticleGenerator = ({
   customProfileName,
   customOutputTemplates,
 }: ArticleGeneratorProps) => {
-  // Determine the profile config - use custom templates if provided, otherwise use standard
-  const baseProfileConfig = PROFILE_TEMPLATES[profileType];
+  // Determine available templates - use custom templates if provided, otherwise use profile defaults
+  const availableTemplates: OutputTemplateType[] = customOutputTemplates && customOutputTemplates.length > 0
+    ? (customOutputTemplates.filter(t => TEMPLATE_LABELS[t as OutputTemplateType]) as OutputTemplateType[])
+    : PROFILE_DEFAULT_TEMPLATES[profileType];
   
-  // For custom profiles, map their template IDs to the available template structure
-  const profileConfig = customOutputTemplates && customOutputTemplates.length > 0
-    ? {
-        templates: getTemplatesFromCustomList(customOutputTemplates),
-        labels: getLabelsFromCustomList(customOutputTemplates),
-      }
-    : baseProfileConfig;
+  // Ensure we have at least one template
+  const templates = availableTemplates.length > 0 ? availableTemplates : ['simple'] as OutputTemplateType[];
   
   const exportConfig = EXPORT_FORMATS[profileType];
   const [generationMode, setGenerationMode] = useState<'article' | 'smart'>('article');
-  const [template, setTemplate] = useState<KnowledgeArticle['template']>(profileConfig.templates[0]);
+  const [template, setTemplate] = useState<OutputTemplateType>(templates[0]);
   const [article, setArticle] = useState<KnowledgeArticle | null>(null);
   const [templateContent, setTemplateContent] = useState<TemplateContent | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -644,7 +511,6 @@ export const ArticleGenerator = ({
   const { getEnabledSections, hasCustomizations } = useTemplateSections();
 
   const handleApplySmartContent = (smartContent: GeneratedContent) => {
-    // Enhance the article with smart content
     if (article && templateContent) {
       setArticle({
         ...article,
@@ -667,7 +533,7 @@ export const ArticleGenerator = ({
     const enabledSections = getEnabledSections(profileType, template);
     const enabledLabels = enabledSections.map(s => s.label);
     
-    setTemplateContent(generateTemplateContent(session, template, profileType, enabledLabels));
+    setTemplateContent(generateTemplateContent(session, template, enabledLabels));
     setIsGenerating(false);
     setSaved(false);
   };
@@ -697,7 +563,7 @@ export const ArticleGenerator = ({
       sessionId: article.sessionId,
       profileType,
       templateType: template,
-      templateLabel: profileConfig.labels[template],
+      templateLabel: TEMPLATE_LABELS[template],
     };
     
     onSaveArticle(savedArticle);
@@ -806,12 +672,12 @@ export const ArticleGenerator = ({
               onApplyContent={handleApplySmartContent}
             />
           ) : (
-          <Tabs value={template} onValueChange={(v) => { setTemplate(v as KnowledgeArticle['template']); setArticle(null); setSaved(false); }}>
+          <Tabs value={template} onValueChange={(v) => { setTemplate(v as OutputTemplateType); setArticle(null); setSaved(false); }}>
             <div className="flex items-center justify-between mb-4">
-              <TabsList className="grid grid-cols-4">
-                {profileConfig.templates.map((t) => (
+              <TabsList className={`grid grid-cols-${Math.min(templates.length, 4)}`}>
+                {templates.map((t) => (
                   <TabsTrigger key={t} value={t}>
-                    {profileConfig.labels[t]}
+                    {TEMPLATE_LABELS[t]}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -819,7 +685,7 @@ export const ArticleGenerator = ({
               <TemplateSectionDialog
                 profileType={profileType}
                 templateKey={template}
-                templateLabel={profileConfig.labels[template]}
+                templateLabel={TEMPLATE_LABELS[template]}
               />
             </div>
 
@@ -829,7 +695,7 @@ export const ArticleGenerator = ({
                   <Sparkles className="w-16 h-16 text-primary mb-4" />
                   <h3 className="text-lg font-medium mb-2">Ready to Generate</h3>
                   <p className="text-muted-foreground text-center mb-4 max-w-md">
-                    AI will analyze {session.events.length} captured events and create a structured {profileConfig.labels[template]} you can save, share, or export.
+                    AI will analyze {session.events.length} captured events and create a structured {TEMPLATE_LABELS[template]} you can save, share, or export.
                   </p>
                   {hasCustomizations(profileType, template) && (
                     <p className="text-xs text-primary mb-4 flex items-center gap-1">
@@ -851,7 +717,7 @@ export const ArticleGenerator = ({
                     ) : (
                       <>
                         <Sparkles className="w-5 h-5" />
-                        Generate {profileConfig.labels[template]}
+                        Generate {TEMPLATE_LABELS[template]}
                       </>
                     )}
                   </Button>
