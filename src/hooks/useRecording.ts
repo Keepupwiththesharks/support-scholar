@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { RecordingSession, ActivityEvent, RecordingStatus, UserProfileType, RecordingPreferences, DEFAULT_PROFILES } from '@/types';
+import { RecordingSession, ActivityEvent, RecordingStatus } from '@/types';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 // Rich content templates for each source type
-const contentTemplates = {
+const contentTemplates: Record<string, { code?: string[]; text?: string[]; summary?: string[]; highlights?: string[] }> = {
   'VS Code': {
     code: [
       `const handleSubmit = async (data) => {\n  try {\n    await api.post('/submit', data);\n    toast.success('Saved!');\n  } catch (err) {\n    console.error(err);\n  }\n};`,
@@ -54,14 +54,6 @@ const contentTemplates = {
     ],
     summary: ['Team coordination', 'Issue discussion', 'Schedule update'],
   },
-  'Discord': {
-    text: [
-      'Great progress on the study group project! Next meeting Thursday.',
-      'Anyone else stuck on chapter 5? The recursion examples are tricky.',
-      'Shared resource: https://docs.example.com/guide',
-    ],
-    highlights: ['Study tips shared', 'Resources linked', 'Questions answered'],
-  },
   'Google Docs': {
     text: [
       '## Research Proposal\nThis study aims to investigate the effects of...',
@@ -78,98 +70,30 @@ const contentTemplates = {
     ],
     summary: ['45 minute call', '6 participants', 'Recording available'],
   },
-  'Salesforce': {
-    text: [
-      'Case #00123456: Customer reporting login issues after password reset',
-      'Knowledge Article: Troubleshooting SSO Configuration',
-      'Account: Acme Corp - Enterprise tier - Annual renewal in 30 days',
-    ],
-    highlights: ['Priority: High', 'SLA: 4 hours', 'Escalated to Tier 2'],
-  },
-  'Jira': {
-    text: [
-      'PROJ-1234: Implement user authentication - In Progress',
-      'Sprint 14: 8 story points completed, 5 remaining',
-      'Bug: PROJ-1240 - Fix memory leak in dashboard component',
-    ],
-    highlights: ['Due date: Friday', 'Assigned to: Dev Team', 'Blocked by: API team'],
-  },
 };
 
-// Activity sources organized by tracking category
-const activitySourcesByCategory = {
-  trackBrowserTabs: [
-    { type: 'tab' as const, source: 'YouTube', titles: ['React Tutorial - Full Course', 'TypeScript Best Practices', 'Machine Learning Lecture'] },
-    { type: 'tab' as const, source: 'GitHub', titles: ['Pull Request #234 - Fix auth bug', 'Issue #89 - Dark mode', 'Repository: project-x'] },
-    { type: 'tab' as const, source: 'Stack Overflow', titles: ['How to handle async errors in React?', 'TypeScript generics explained'] },
-    { type: 'tab' as const, source: 'Notion', titles: ['Project Roadmap Q4', 'Meeting Notes - Team Sync', 'Research Database'] },
-  ],
-  trackApplications: [
-    { type: 'app' as const, source: 'VS Code', titles: ['src/components/App.tsx', 'hooks/useAuth.ts', 'package.json'] },
-    { type: 'app' as const, source: 'Finder', titles: ['Documents/Project Files', 'Downloads/Resources', 'Desktop/Screenshots'] },
-    { type: 'app' as const, source: 'Notes', titles: ['Quick Ideas', 'Todo List', 'Meeting Notes'] },
-  ],
-  trackTerminal: [
-    { type: 'action' as const, source: 'Terminal', titles: ['git commit -m "fix: auth bug"', 'npm run build', 'docker compose up'] },
-    { type: 'action' as const, source: 'VS Code Terminal', titles: ['npm run dev', 'vitest --run', 'pnpm lint'] },
-  ],
-  trackMessaging: [
-    { type: 'message' as const, source: 'Slack', titles: ['#engineering - Deployment update', '#general - Team announcement', 'DM - Quick sync'] },
-    { type: 'message' as const, source: 'Discord', titles: ['#study-group - Question', 'Voice: Project discussion', 'DM - Resource sharing'] },
-    { type: 'message' as const, source: 'Teams', titles: ['Channel - Sprint planning', 'Chat - Code review feedback'] },
-  ],
-  trackMeetings: [
-    { type: 'app' as const, source: 'Zoom', titles: ['Team Standup', 'Client Presentation', '1:1 with Manager'] },
-    { type: 'app' as const, source: 'Google Meet', titles: ['Project Kickoff', 'Design Review', 'Interview - Sr. Developer'] },
-  ],
-  trackDocuments: [
-    { type: 'app' as const, source: 'Google Docs', titles: ['Research Proposal Draft', 'Technical Spec v2', 'Meeting Minutes'] },
-    { type: 'app' as const, source: 'Notion', titles: ['Wiki - API Documentation', 'Database - User Stories', 'Page - Architecture'] },
-    { type: 'app' as const, source: 'Word', titles: ['Report_Q3.docx', 'Proposal_Final.docx'] },
-  ],
-  trackMedia: [
-    { type: 'tab' as const, source: 'YouTube', titles: ['Tutorial: Advanced React Patterns', 'Lecture: Data Structures', 'Conference: Tech Talk 2024'] },
-    { type: 'app' as const, source: 'Spotify', titles: ['Focus Playlist', 'Coding Beats', 'Tech Podcast'] },
-  ],
-};
-
-// Support-specific sources
-const supportSources = [
-  { type: 'app' as const, source: 'Salesforce', titles: ['Case #00123456 - Login Issue', 'Knowledge Base - SSO Setup', 'Account: Enterprise Client'] },
-  { type: 'app' as const, source: 'Jira', titles: ['SUPPORT-456 - Escalation', 'Sprint Board - Support Queue', 'Bug: PROD-789'] },
-  { type: 'message' as const, source: 'Zendesk', titles: ['Ticket #12345 - Password Reset', 'Customer Chat - Billing Question'] },
-];
-
+// Activity sources for simulation
 type ActivitySource = {
   type: 'tab' | 'app' | 'message' | 'action';
   source: string;
   titles: string[];
 };
 
-const getActivitySourcesForPreferences = (preferences: RecordingPreferences, profileType?: UserProfileType): ActivitySource[] => {
-  const sources: ActivitySource[] = [];
-  
-  Object.entries(preferences).forEach(([key, enabled]) => {
-    if (enabled === true && key in activitySourcesByCategory) {
-      sources.push(...activitySourcesByCategory[key as keyof typeof activitySourcesByCategory]);
-    }
-  });
-  
-  // Add support-specific sources for support profile
-  if (profileType === 'support') {
-    sources.push(...supportSources);
-  }
-  
-  return sources.length > 0 ? sources : activitySourcesByCategory.trackBrowserTabs;
-};
+const activitySources: ActivitySource[] = [
+  { type: 'tab', source: 'YouTube', titles: ['React Tutorial - Full Course', 'TypeScript Best Practices', 'Machine Learning Lecture'] },
+  { type: 'tab', source: 'GitHub', titles: ['Pull Request #234 - Fix auth bug', 'Issue #89 - Dark mode', 'Repository: project-x'] },
+  { type: 'tab', source: 'Stack Overflow', titles: ['How to handle async errors in React?', 'TypeScript generics explained'] },
+  { type: 'tab', source: 'Notion', titles: ['Project Roadmap Q4', 'Meeting Notes - Team Sync', 'Research Database'] },
+  { type: 'app', source: 'VS Code', titles: ['src/components/App.tsx', 'hooks/useAuth.ts', 'package.json'] },
+  { type: 'app', source: 'Finder', titles: ['Documents/Project Files', 'Downloads/Resources', 'Desktop/Screenshots'] },
+  { type: 'action', source: 'Terminal', titles: ['git commit -m "fix: auth bug"', 'npm run build', 'docker compose up'] },
+  { type: 'message', source: 'Slack', titles: ['#engineering - Deployment update', '#general - Team announcement', 'DM - Quick sync'] },
+  { type: 'app', source: 'Zoom', titles: ['Team Standup', 'Client Presentation', '1:1 with Manager'] },
+  { type: 'app', source: 'Google Docs', titles: ['Research Proposal Draft', 'Technical Spec v2', 'Meeting Minutes'] },
+];
 
 const getContentForSource = (source: string): ActivityEvent['content'] => {
-  const templates = contentTemplates[source as keyof typeof contentTemplates] as {
-    code?: string[];
-    text?: string[];
-    summary?: string[];
-    highlights?: string[];
-  } | undefined;
+  const templates = contentTemplates[source];
   
   if (!templates) {
     return {
@@ -197,12 +121,7 @@ const getContentForSource = (source: string): ActivityEvent['content'] => {
   return content;
 };
 
-interface UseRecordingOptions {
-  profileType?: UserProfileType;
-  customPreferences?: RecordingPreferences;
-}
-
-export const useRecording = (options?: UseRecordingOptions) => {
+export const useRecording = () => {
   const [status, setStatus] = useState<RecordingStatus>('idle');
   const [currentSession, setCurrentSession] = useState<RecordingSession | null>(null);
   const [sessions, setSessions] = useState<RecordingSession[]>([]);
@@ -210,19 +129,10 @@ export const useRecording = (options?: UseRecordingOptions) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const activityIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const getPreferences = useCallback((): RecordingPreferences => {
-    if (options?.profileType === 'custom' && options?.customPreferences) {
-      return options.customPreferences;
-    }
-    return DEFAULT_PROFILES[options?.profileType || 'developer'].preferences;
-  }, [options?.profileType, options?.customPreferences]);
-
   const simulateActivity = useCallback(() => {
     if (!currentSession || status !== 'recording') return;
 
-    const preferences = getPreferences();
-    const sources = getActivitySourcesForPreferences(preferences, options?.profileType);
-    const source = sources[Math.floor(Math.random() * sources.length)];
+    const source = activitySources[Math.floor(Math.random() * activitySources.length)];
     const title = source.titles[Math.floor(Math.random() * source.titles.length)];
     const content = getContentForSource(source.source);
 
@@ -244,7 +154,7 @@ export const useRecording = (options?: UseRecordingOptions) => {
         events: [...prev.events, newEvent],
       };
     });
-  }, [currentSession, status, getPreferences, options?.profileType]);
+  }, [currentSession, status]);
 
   useEffect(() => {
     if (status === 'recording') {
@@ -252,9 +162,8 @@ export const useRecording = (options?: UseRecordingOptions) => {
         setElapsedTime(prev => prev + 1);
       }, 1000);
       
-      const preferences = getPreferences();
-      const activityInterval = Math.max(2000, preferences.captureInterval * 100);
-      activityIntervalRef.current = setInterval(simulateActivity, activityInterval);
+      // Simulate activity every 2-4 seconds
+      activityIntervalRef.current = setInterval(simulateActivity, 2500);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -270,7 +179,7 @@ export const useRecording = (options?: UseRecordingOptions) => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (activityIntervalRef.current) clearInterval(activityIntervalRef.current);
     };
-  }, [status, simulateActivity, getPreferences]);
+  }, [status, simulateActivity]);
 
   const startRecording = useCallback((ticketId?: string) => {
     const session: RecordingSession = {
@@ -281,13 +190,12 @@ export const useRecording = (options?: UseRecordingOptions) => {
       events: [],
       ticketId,
       tags: [],
-      profileType: options?.profileType,
     };
 
     setCurrentSession(session);
     setStatus('recording');
     setElapsedTime(0);
-  }, [options?.profileType]);
+  }, []);
 
   const pauseRecording = useCallback(() => {
     setStatus('paused');

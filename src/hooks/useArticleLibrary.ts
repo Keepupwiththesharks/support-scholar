@@ -1,11 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import { SavedArticle, UserProfileType } from '@/types';
+import { SavedArticle } from '@/types';
 
 const STORAGE_KEY = 'recap-article-library';
 
 export const useArticleLibrary = () => {
   const [articles, setArticles] = useState<SavedArticle[]>([]);
-  const [filterProfile, setFilterProfile] = useState<UserProfileType | 'all'>('all');
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -47,19 +46,13 @@ export const useArticleLibrary = () => {
     });
   }, []);
 
-  const filteredArticles = filterProfile === 'all' 
-    ? articles 
-    : articles.filter(a => a.profileType === filterProfile);
-
   const getArticlesBySession = useCallback((sessionId: string) => {
     return articles.filter(a => a.sessionId === sessionId);
   }, [articles]);
 
   return {
-    articles: filteredArticles,
+    articles,
     allArticles: articles,
-    filterProfile,
-    setFilterProfile,
     saveArticle,
     deleteArticle,
     getArticlesBySession,
