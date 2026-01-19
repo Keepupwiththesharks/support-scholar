@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -7,6 +7,22 @@ import { Input } from '@/components/ui/input';
 import { RecordingSession, UserProfileType } from '@/types';
 import { generateSmartContent, GeneratedContent } from '@/lib/contentGenerationEngine';
 import { cn } from '@/lib/utils';
+import { useContentPresets, ContentPreset } from '@/hooks/useContentPresets';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DndContext,
   closestCenter,
@@ -203,7 +219,16 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'insights' | 'takeaways' | 'actions'>('insights');
-
+  
+  // Preset management
+  const { presets, savePreset, deletePreset, getPresetsByProfile, duplicatePreset } = useContentPresets();
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [presetDescription, setPresetDescription] = useState('');
+  const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
+  
+  const profilePresets = getPresetsByProfile(profileType);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -219,10 +244,37 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
 
   const handleRegenerate = async () => {
     setIsGenerating(true);
+    setLoadedPresetId(null);
     await new Promise(resolve => setTimeout(resolve, 600));
     const generated = generateSmartContent(session, profileType);
     setContent(generated);
     setIsGenerating(false);
+  };
+
+  // Preset handlers
+  const handleSavePreset = () => {
+    if (!content || !presetName.trim()) return;
+    savePreset(presetName.trim(), content, profileType, presetDescription.trim() || undefined);
+    setPresetName('');
+    setPresetDescription('');
+    setShowSaveDialog(false);
+  };
+
+  const handleLoadPreset = (preset: ContentPreset) => {
+    setContent(preset.content);
+    setLoadedPresetId(preset.id);
+    setShowLoadDialog(false);
+  };
+
+  const handleDeletePreset = (id: string) => {
+    deletePreset(id);
+    if (loadedPresetId === id) {
+      setLoadedPresetId(null);
+    }
+  };
+
+  const handleDuplicatePreset = (id: string) => {
+    duplicatePreset(id);
   };
 
   // Drag end handlers
@@ -484,6 +536,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   }
 
   return (
+    <>
     <div className="border rounded-xl overflow-hidden bg-card">
       {/* Header with confidence score */}
       <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-secondary/10">
@@ -491,11 +544,21 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           <div className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-primary" />
             <h3 className="font-semibold">Smart Analysis</h3>
-            <Badge variant="outline" className="text-xs">Drag to reorder</Badge>
+            {loadedPresetId && (
+              <Badge variant="secondary" className="text-xs">From Preset</Badge>
+            )}
           </div>
-          <Button variant="ghost" size="sm" onClick={handleRegenerate} disabled={isGenerating}>
-            <RefreshCw className={cn("w-4 h-4", isGenerating && "animate-spin")} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setShowLoadDialog(true)} title="Load preset">
+              <FolderOpen className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowSaveDialog(true)} title="Save as preset">
+              <Save className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleRegenerate} disabled={isGenerating} title="Regenerate">
+              <RefreshCw className={cn("w-4 h-4", isGenerating && "animate-spin")} />
+            </Button>
+          </div>
         </div>
         
         <div className="flex items-center gap-3">
@@ -692,5 +755,131 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
         )}
       </div>
     </div>
+
+    {/* Save Preset Dialog */}
+    <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Save as Preset</DialogTitle>
+          <DialogDescription>
+            Save this content configuration to reuse across sessions.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Preset Name</label>
+            <Input
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder="e.g., Weekly Report Template"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Description (optional)</label>
+            <Input
+              value={presetDescription}
+              onChange={(e) => setPresetDescription(e.target.value)}
+              placeholder="Brief description of this preset"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowSaveDialog(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSavePreset} disabled={!presetName.trim()}>
+            <Save className="w-4 h-4 mr-2" />
+            Save Preset
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Load Preset Dialog */}
+    <Dialog open={showLoadDialog} onOpenChange={setShowLoadDialog}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Load Preset</DialogTitle>
+          <DialogDescription>
+            Select a saved preset to load its content configuration.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 max-h-80 overflow-y-auto">
+          {presets.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">No presets saved yet.</p>
+              <p className="text-xs">Save your current content to create a preset.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {presets.map((preset) => (
+                <div
+                  key={preset.id}
+                  className={cn(
+                    "p-3 rounded-lg border cursor-pointer transition-colors group",
+                    loadedPresetId === preset.id
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-muted/50"
+                  )}
+                  onClick={() => handleLoadPreset(preset)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-sm truncate">{preset.name}</h4>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {preset.profileType}
+                        </Badge>
+                      </div>
+                      {preset.description && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                          {preset.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {preset.content.insights.length} insights • {preset.content.keyTakeaways.length} takeaways • {preset.content.actionItems.length} actions
+                      </p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleLoadPreset(preset); }}>
+                          <FolderOpen className="w-4 h-4 mr-2" />
+                          Load
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicatePreset(preset.id); }}>
+                          <Copy className="w-4 h-4 mr-2" />
+                          Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={(e) => { e.stopPropagation(); handleDeletePreset(preset.id); }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowLoadDialog(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
