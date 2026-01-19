@@ -210,8 +210,12 @@ export const useContentPresets = () => {
     URL.revokeObjectURL(url);
   }, [presets]);
 
-  // Import presets from JSON
-  const importPresetsFromJSON = useCallback((file: File): Promise<{ imported: number; skipped: number; errors: string[] }> => {
+  // Parse presets from JSON file (without importing)
+  const parsePresetsFromJSON = useCallback((file: File): Promise<{
+    presets: ContentPreset[];
+    conflicts: { imported: ContentPreset; existing: ContentPreset }[];
+    errors: string[];
+  }> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       
@@ -220,37 +224,21 @@ export const useContentPresets = () => {
           const content = e.target?.result as string;
           const data = JSON.parse(content);
           
-          // Validate structure
           if (!data.presets || !Array.isArray(data.presets)) {
-            resolve({ imported: 0, skipped: 0, errors: ['Invalid file format: missing presets array'] });
+            resolve({ presets: [], conflicts: [], errors: ['Invalid file format: missing presets array'] });
             return;
           }
           
-          let imported = 0;
-          let skipped = 0;
+          const parsedPresets: ContentPreset[] = [];
+          const conflicts: { imported: ContentPreset; existing: ContentPreset }[] = [];
           const errors: string[] = [];
-          const newPresets: ContentPreset[] = [];
           
           for (const preset of data.presets) {
-            // Validate required fields
             if (!preset.name || !preset.content || !preset.profileType) {
               errors.push(`Skipped preset: missing required fields`);
-              skipped++;
               continue;
             }
             
-            // Check for duplicates by name and profile
-            const existingPreset = presets.find(
-              p => p.name.toLowerCase() === preset.name.toLowerCase() && p.profileType === preset.profileType
-            );
-            
-            if (existingPreset) {
-              errors.push(`Skipped "${preset.name}": already exists`);
-              skipped++;
-              continue;
-            }
-            
-            // Create new preset with fresh ID
             const newPreset: ContentPreset = {
               id: `preset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               name: preset.name,
@@ -263,28 +251,71 @@ export const useContentPresets = () => {
               updatedAt: new Date(),
             };
             
-            newPresets.push(newPreset);
-            imported++;
+            const existingPreset = presets.find(
+              p => p.name.toLowerCase() === preset.name.toLowerCase() && p.profileType === preset.profileType
+            );
+            
+            if (existingPreset) {
+              conflicts.push({ imported: newPreset, existing: existingPreset });
+            } else {
+              parsedPresets.push(newPreset);
+            }
           }
           
-          if (newPresets.length > 0) {
-            const updatedPresets = [...presets, ...newPresets];
-            setPresets(updatedPresets);
-            saveToStorage(updatedPresets);
-          }
-          
-          resolve({ imported, skipped, errors });
+          resolve({ presets: parsedPresets, conflicts, errors });
         } catch (error) {
-          resolve({ imported: 0, skipped: 0, errors: ['Failed to parse JSON file'] });
+          resolve({ presets: [], conflicts: [], errors: ['Failed to parse JSON file'] });
         }
       };
       
       reader.onerror = () => {
-        resolve({ imported: 0, skipped: 0, errors: ['Failed to read file'] });
+        resolve({ presets: [], conflicts: [], errors: ['Failed to read file'] });
       };
       
       reader.readAsText(file);
     });
+  }, [presets]);
+
+  // Apply import with conflict resolution
+  const applyImport = useCallback((
+    newPresets: ContentPreset[],
+    conflictResolutions: { presetName: string; action: 'overwrite' | 'keep_both' | 'skip' }[],
+    conflicts: { imported: ContentPreset; existing: ContentPreset }[]
+  ): { imported: number; overwritten: number; skipped: number } => {
+    let imported = newPresets.length;
+    let overwritten = 0;
+    let skipped = 0;
+    
+    let updatedPresets = [...presets];
+    const presetsToAdd: ContentPreset[] = [...newPresets];
+    
+    for (const conflict of conflicts) {
+      const resolution = conflictResolutions.find(r => r.presetName === conflict.imported.name);
+      const action = resolution?.action || 'skip';
+      
+      if (action === 'overwrite') {
+        // Remove existing and add new
+        updatedPresets = updatedPresets.filter(p => p.id !== conflict.existing.id);
+        presetsToAdd.push(conflict.imported);
+        overwritten++;
+      } else if (action === 'keep_both') {
+        // Add with modified name
+        const renamedPreset: ContentPreset = {
+          ...conflict.imported,
+          name: `${conflict.imported.name} (Imported)`,
+        };
+        presetsToAdd.push(renamedPreset);
+        imported++;
+      } else {
+        skipped++;
+      }
+    }
+    
+    const finalPresets = [...updatedPresets, ...presetsToAdd];
+    setPresets(finalPresets);
+    saveToStorage(finalPresets);
+    
+    return { imported, overwritten, skipped };
   }, [presets, saveToStorage]);
 
   return {
@@ -300,6 +331,7 @@ export const useContentPresets = () => {
     filterPresets,
     duplicatePreset,
     exportPresetsAsJSON,
-    importPresetsFromJSON,
+    parsePresetsFromJSON,
+    applyImport,
   };
 };
