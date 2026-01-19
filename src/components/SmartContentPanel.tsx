@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2 } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical, Download, FileText, Save, FolderOpen, Copy, MoreHorizontal, Tag, Filter, Upload, Share2, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -221,10 +221,17 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [activeTab, setActiveTab] = useState<'insights' | 'takeaways' | 'actions'>('insights');
   
   // Preset management
-  const { presets, allTags, savePreset, deletePreset, filterPresets, duplicatePreset, exportPresetsAsJSON, importPresetsFromJSON } = useContentPresets();
+  const { presets, allTags, savePreset, deletePreset, filterPresets, duplicatePreset, exportPresetsAsJSON, parsePresetsFromJSON, applyImport } = useContentPresets();
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; overwritten: number; skipped: number } | null>(null);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [pendingImport, setPendingImport] = useState<{
+    presets: ContentPreset[];
+    conflicts: { imported: ContentPreset; existing: ContentPreset }[];
+  } | null>(null);
+  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'overwrite' | 'keep_both' | 'skip'>>({});
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetCategory, setPresetCategory] = useState<PresetCategory>('general');
@@ -321,11 +328,50 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     const file = event.target.files?.[0];
     if (!file) return;
     
-    const result = await importPresetsFromJSON(file);
-    setImportResult(result);
+    const result = await parsePresetsFromJSON(file);
+    
+    if (result.errors.length > 0 && result.presets.length === 0 && result.conflicts.length === 0) {
+      setImportErrors(result.errors);
+      setImportResult({ imported: 0, overwritten: 0, skipped: 0 });
+    } else if (result.conflicts.length > 0) {
+      // Show conflict resolution dialog
+      setPendingImport({ presets: result.presets, conflicts: result.conflicts });
+      setConflictResolutions(
+        Object.fromEntries(result.conflicts.map(c => [c.imported.name, 'skip' as const]))
+      );
+      setImportErrors(result.errors);
+      setShowConflictDialog(true);
+    } else {
+      // No conflicts, import directly
+      const importRes = applyImport(result.presets, [], []);
+      setImportResult(importRes);
+      setImportErrors(result.errors);
+    }
     
     // Reset the input so the same file can be selected again
     event.target.value = '';
+  };
+
+  const handleApplyConflictResolutions = () => {
+    if (!pendingImport) return;
+    
+    const resolutions = Object.entries(conflictResolutions).map(([presetName, action]) => ({
+      presetName,
+      action,
+    }));
+    
+    const result = applyImport(pendingImport.presets, resolutions, pendingImport.conflicts);
+    setImportResult(result);
+    setShowConflictDialog(false);
+    setPendingImport(null);
+    setConflictResolutions({});
+  };
+
+  const handleSetAllConflicts = (action: 'overwrite' | 'keep_both' | 'skip') => {
+    if (!pendingImport) return;
+    setConflictResolutions(
+      Object.fromEntries(pendingImport.conflicts.map(c => [c.imported.name, action]))
+    );
   };
 
   // Drag end handlers
@@ -935,19 +981,22 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           {importResult && (
             <div className={cn(
               "p-3 rounded-lg text-sm",
-              importResult.imported > 0 ? "bg-green-500/10 text-green-700" : "bg-amber-500/10 text-amber-700"
+              importResult.imported > 0 || importResult.overwritten > 0 ? "bg-green-500/10 text-green-700" : "bg-amber-500/10 text-amber-700"
             )}>
               {importResult.imported > 0 && (
                 <p>✓ Successfully imported {importResult.imported} preset{importResult.imported !== 1 ? 's' : ''}</p>
               )}
+              {importResult.overwritten > 0 && (
+                <p>✓ Overwrote {importResult.overwritten} existing preset{importResult.overwritten !== 1 ? 's' : ''}</p>
+              )}
               {importResult.skipped > 0 && (
                 <p>⚠ Skipped {importResult.skipped} preset{importResult.skipped !== 1 ? 's' : ''}</p>
               )}
-              {importResult.errors.length > 0 && importResult.errors.slice(0, 3).map((err, i) => (
+              {importErrors.length > 0 && importErrors.slice(0, 3).map((err, i) => (
                 <p key={i} className="text-xs mt-1 opacity-80">• {err}</p>
               ))}
               <button 
-                onClick={() => setImportResult(null)} 
+                onClick={() => { setImportResult(null); setImportErrors([]); }} 
                 className="text-xs underline mt-1 hover:no-underline"
               >
                 Dismiss
@@ -1136,6 +1185,98 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowLoadDialog(false)}>
             Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Conflict Resolution Dialog */}
+    <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            Resolve Import Conflicts
+          </DialogTitle>
+          <DialogDescription>
+            {pendingImport?.conflicts.length} preset{pendingImport?.conflicts.length !== 1 ? 's' : ''} already exist. Choose how to handle each conflict.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {/* Bulk actions */}
+        <div className="flex items-center gap-2 pb-2 border-b">
+          <span className="text-sm text-muted-foreground">Set all to:</span>
+          <Button variant="outline" size="sm" onClick={() => handleSetAllConflicts('overwrite')}>
+            Overwrite
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleSetAllConflicts('keep_both')}>
+            Keep Both
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleSetAllConflicts('skip')}>
+            Skip
+          </Button>
+        </div>
+        
+        <div className="max-h-72 overflow-y-auto space-y-3 py-2">
+          {pendingImport?.conflicts.map((conflict) => (
+            <div key={conflict.imported.name} className="p-3 rounded-lg border bg-muted/30">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-sm truncate">{conflict.imported.name}</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Existing: {conflict.existing.content.insights.length} insights, {conflict.existing.content.keyTakeaways.length} takeaways
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Imported: {conflict.imported.content.insights.length} insights, {conflict.imported.content.keyTakeaways.length} takeaways
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant={conflictResolutions[conflict.imported.name] === 'overwrite' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'overwrite' }))}
+                >
+                  <ArrowLeftRight className="w-3 h-3 mr-1" />
+                  Overwrite
+                </Button>
+                <Button
+                  variant={conflictResolutions[conflict.imported.name] === 'keep_both' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'keep_both' }))}
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  Keep Both
+                </Button>
+                <Button
+                  variant={conflictResolutions[conflict.imported.name] === 'skip' ? 'secondary' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setConflictResolutions(prev => ({ ...prev, [conflict.imported.name]: 'skip' }))}
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Skip
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {pendingImport && pendingImport.presets.length > 0 && (
+          <p className="text-xs text-muted-foreground border-t pt-2">
+            {pendingImport.presets.length} non-conflicting preset{pendingImport.presets.length !== 1 ? 's' : ''} will also be imported.
+          </p>
+        )}
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setShowConflictDialog(false); setPendingImport(null); }}>
+            Cancel
+          </Button>
+          <Button onClick={handleApplyConflictResolutions}>
+            <Check className="w-4 h-4 mr-2" />
+            Apply & Import
           </Button>
         </DialogFooter>
       </DialogContent>
