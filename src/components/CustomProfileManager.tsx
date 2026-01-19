@@ -59,15 +59,128 @@ interface CustomProfileManagerProps {
   onOpenChange: (open: boolean) => void;
   onSelectProfile?: (profileId: string) => void;
   selectedCustomProfileId?: string;
+  currentProfileType?: 'student' | 'developer' | 'support' | 'researcher' | 'custom';
 }
 
 type BaseProfileType = 'student' | 'developer' | 'support' | 'researcher' | 'custom';
+
+// Recommendation scoring based on various signals
+const getRecommendationScore = (
+  template: ProfileTemplate,
+  currentProfileType: BaseProfileType | undefined,
+  existingProfiles: CustomProfile[],
+  hour: number
+): number => {
+  let score = 0;
+  
+  // 1. Match current profile type (strong signal)
+  if (currentProfileType && template.basedOn === currentProfileType) {
+    score += 30;
+  }
+  
+  // 2. Category affinity based on existing profiles
+  const existingCategories = existingProfiles.map(p => {
+    const matchingTemplate = PROFILE_TEMPLATES.find(t => t.name === p.name);
+    return matchingTemplate?.category;
+  }).filter(Boolean);
+  
+  if (existingCategories.includes(template.category)) {
+    score += 20;
+  }
+  
+  // 3. Time-based relevance
+  const isWorkHours = hour >= 9 && hour < 18;
+  const isStudyTime = hour >= 18 && hour < 22;
+  const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
+  
+  if (isWorkHours && !isWeekend) {
+    if (['Development', 'Support', 'Business'].includes(template.category)) score += 15;
+  } else if (isStudyTime) {
+    if (['Education', 'Research'].includes(template.category)) score += 15;
+  } else if (isWeekend) {
+    if (['Personal', 'Creative', 'Education'].includes(template.category)) score += 10;
+  }
+  
+  // 4. Complementary profiles (if they have dev, suggest devops/code reviewer)
+  const existingNames = existingProfiles.map(p => p.name);
+  const complementaryPairs: Record<string, string[]> = {
+    'Frontend Developer': ['Backend Engineer', 'Designer', 'Code Reviewer'],
+    'Backend Engineer': ['Frontend Developer', 'DevOps Engineer', 'Bug Hunter'],
+    'DevOps Engineer': ['Backend Engineer', 'Technical Support'],
+    'Data Analyst': ['UX Researcher', 'Market Analyst'],
+    'Content Writer': ['Designer', 'Podcaster'],
+    'Project Manager': ['Product Manager', 'Consultant'],
+    'Online Course Learner': ['Exam Prep', 'Language Learner'],
+  };
+  
+  for (const [existing, complements] of Object.entries(complementaryPairs)) {
+    if (existingNames.includes(existing) && complements.includes(template.name)) {
+      score += 25;
+    }
+  }
+  
+  // 5. Popularity boost for versatile profiles
+  const popularProfiles = ['Frontend Developer', 'Project Manager', 'Content Writer', 'Online Course Learner', 'Data Analyst'];
+  if (popularProfiles.includes(template.name)) {
+    score += 5;
+  }
+  
+  // 6. New user boost - suggest starter profiles
+  if (existingProfiles.length === 0) {
+    const starterProfiles = ['Online Course Learner', 'Frontend Developer', 'Content Writer', 'Hobbyist'];
+    if (starterProfiles.includes(template.name)) {
+      score += 20;
+    }
+  }
+  
+  return score;
+};
+
+const getRecommendationReason = (
+  template: ProfileTemplate,
+  currentProfileType: BaseProfileType | undefined,
+  existingProfiles: CustomProfile[]
+): string => {
+  if (currentProfileType && template.basedOn === currentProfileType) {
+    return `Matches your ${currentProfileType} profile`;
+  }
+  
+  const existingNames = existingProfiles.map(p => p.name);
+  const complementaryPairs: Record<string, string> = {
+    'Frontend Developer': 'Complements your Frontend Developer profile',
+    'Backend Engineer': 'Great pair with Frontend Developer',
+    'Code Reviewer': 'Works well with your dev profiles',
+    'DevOps Engineer': 'Extends your engineering toolkit',
+    'Data Analyst': 'Adds analytics capabilities',
+  };
+  
+  for (const [trigger, reason] of Object.entries(complementaryPairs)) {
+    if (existingNames.includes(trigger.split(' ')[0] + ' ' + (trigger.split(' ')[1] || ''))) {
+      return reason;
+    }
+  }
+  
+  const hour = new Date().getHours();
+  if (hour >= 9 && hour < 18 && ['Development', 'Support', 'Business'].includes(template.category)) {
+    return 'Popular during work hours';
+  }
+  if (hour >= 18 && hour < 22 && ['Education', 'Research'].includes(template.category)) {
+    return 'Great for evening learning';
+  }
+  
+  if (existingProfiles.length === 0) {
+    return 'Great starter profile';
+  }
+  
+  return 'Recommended for you';
+};
 
 export const CustomProfileManager = ({
   open,
   onOpenChange,
   onSelectProfile,
   selectedCustomProfileId,
+  currentProfileType,
 }: CustomProfileManagerProps) => {
   const {
     customProfiles,
@@ -126,6 +239,26 @@ export const CustomProfileManager = ({
       return acc;
     }, {} as Record<string, ProfileTemplate[]>);
   }, [filteredTemplates]);
+
+  // Generate personalized recommendations
+  const recommendations = useMemo(() => {
+    const hour = new Date().getHours();
+    const availableForRecommendation = PROFILE_TEMPLATES.filter(
+      t => !customProfiles.some(p => p.name === t.name)
+    );
+    
+    const scored = availableForRecommendation.map(template => ({
+      template,
+      score: getRecommendationScore(template, currentProfileType, customProfiles, hour),
+      reason: getRecommendationReason(template, currentProfileType, customProfiles),
+    }));
+    
+    // Sort by score and take top 4
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .filter(r => r.score > 0); // Only show if there's a reason
+  }, [customProfiles, currentProfileType]);
 
   const handleAddFromTemplate = (template: ProfileTemplate) => {
     const basePrefs = DEFAULT_PROFILES[template.basedOn].preferences;
@@ -519,6 +652,51 @@ export const CustomProfileManager = ({
                 </div>
 
                 <ScrollArea className="h-[300px] pr-4">
+                  {/* Recommended for You Section */}
+                  {recommendations.length > 0 && templateSearch === '' && selectedCategory === 'all' && (
+                    <div className="mb-6 p-4 rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Star className="w-4 h-4 text-primary fill-primary" />
+                        <h4 className="text-sm font-semibold">Recommended for You</h4>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {recommendations.map(({ template, reason }) => {
+                          const alreadyAdded = customProfiles.some(p => p.name === template.name);
+                          const isSelected = selectedTemplates.has(template.name);
+                          return (
+                            <div
+                              key={template.name}
+                              className={cn(
+                                "p-3 rounded-lg border bg-card/80 backdrop-blur transition-all hover:shadow-md cursor-pointer",
+                                isSelected && "ring-2 ring-primary bg-primary/10"
+                              )}
+                              onClick={() => !alreadyAdded && toggleTemplateSelection(template.name)}
+                            >
+                              <div className="flex items-start gap-2">
+                                {!alreadyAdded && (
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleTemplateSelection(template.name)}
+                                    className="mt-0.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                )}
+                                <span className="text-xl">{template.icon}</span>
+                                <div className="flex-1 min-w-0">
+                                  <h5 className="font-medium text-sm truncate">{template.name}</h5>
+                                  <p className="text-xs text-primary mt-0.5">{reason}</p>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex gap-1">
+                                <Badge variant="outline" className="text-xs">{template.category}</Badge>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {filteredTemplates.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <p>No templates match your search</p>
