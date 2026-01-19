@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import { RecordingSession, UserProfileType } from '@/types';
 import { generateSmartContent, GeneratedContent } from '@/lib/contentGenerationEngine';
 import { cn } from '@/lib/utils';
@@ -13,6 +14,144 @@ interface SmartContentPanelProps {
   onApplyContent?: (content: GeneratedContent) => void;
 }
 
+interface EditableItemProps {
+  value: string;
+  onSave: (value: string) => void;
+  onDelete: () => void;
+  icon?: React.ReactNode;
+  prefix?: string;
+  showCheckbox?: boolean;
+}
+
+const EditableItem = ({ value, onSave, onDelete, icon, prefix, showCheckbox }: EditableItemProps) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+
+  const handleSave = () => {
+    if (editValue.trim()) {
+      onSave(editValue.trim());
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditValue(value);
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <li className="flex gap-2 items-center">
+        <Input
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          className="flex-1 h-8 text-sm"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave();
+            if (e.key === 'Escape') handleCancel();
+          }}
+        />
+        <Button variant="ghost" size="sm" onClick={handleSave} className="h-8 w-8 p-0 text-green-600 hover:text-green-700">
+          <Check className="w-4 h-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleCancel} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+          <X className="w-4 h-4" />
+        </Button>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex gap-3 text-sm group items-start">
+      {showCheckbox && <input type="checkbox" className="mt-1 rounded border-muted-foreground" />}
+      {icon && <span className="flex-shrink-0">{icon}</span>}
+      {prefix && <span className="text-primary flex-shrink-0">{prefix}</span>}
+      <span className="text-foreground flex-1">{value}</span>
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setIsEditing(true)} 
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+        >
+          <Pencil className="w-3 h-3" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onDelete} 
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="w-3 h-3" />
+        </Button>
+      </div>
+    </li>
+  );
+};
+
+interface AddItemInputProps {
+  onAdd: (value: string) => void;
+  placeholder: string;
+}
+
+const AddItemInput = ({ onAdd, placeholder }: AddItemInputProps) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [value, setValue] = useState('');
+
+  const handleAdd = () => {
+    if (value.trim()) {
+      onAdd(value.trim());
+      setValue('');
+      setIsAdding(false);
+    }
+  };
+
+  if (!isAdding) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => setIsAdding(true)}
+        className="text-xs text-muted-foreground hover:text-primary mt-2"
+      >
+        <Plus className="w-3 h-3 mr-1" />
+        Add item
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex gap-2 items-center mt-2">
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        className="flex-1 h-8 text-sm"
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleAdd();
+          if (e.key === 'Escape') {
+            setValue('');
+            setIsAdding(false);
+          }
+        }}
+      />
+      <Button variant="ghost" size="sm" onClick={handleAdd} className="h-8 w-8 p-0 text-green-600 hover:text-green-700">
+        <Check className="w-4 h-4" />
+      </Button>
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => { setValue(''); setIsAdding(false); }} 
+        className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+      >
+        <X className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+};
+
 export const SmartContentPanel = ({ session, profileType, onApplyContent }: SmartContentPanelProps) => {
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -20,7 +159,6 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
 
   const handleGenerate = async () => {
     setIsGenerating(true);
-    // Simulate processing time for better UX
     await new Promise(resolve => setTimeout(resolve, 800));
     const generated = generateSmartContent(session, profileType);
     setContent(generated);
@@ -33,6 +171,58 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     const generated = generateSmartContent(session, profileType);
     setContent(generated);
     setIsGenerating(false);
+  };
+
+  // Editing handlers
+  const updateInsight = (index: number, value: string) => {
+    if (!content) return;
+    const newInsights = [...content.insights];
+    newInsights[index] = value;
+    setContent({ ...content, insights: newInsights });
+  };
+
+  const deleteInsight = (index: number) => {
+    if (!content) return;
+    setContent({ ...content, insights: content.insights.filter((_, i) => i !== index) });
+  };
+
+  const addInsight = (value: string) => {
+    if (!content) return;
+    setContent({ ...content, insights: [...content.insights, value] });
+  };
+
+  const updateTakeaway = (index: number, value: string) => {
+    if (!content) return;
+    const newTakeaways = [...content.keyTakeaways];
+    newTakeaways[index] = value;
+    setContent({ ...content, keyTakeaways: newTakeaways });
+  };
+
+  const deleteTakeaway = (index: number) => {
+    if (!content) return;
+    setContent({ ...content, keyTakeaways: content.keyTakeaways.filter((_, i) => i !== index) });
+  };
+
+  const addTakeaway = (value: string) => {
+    if (!content) return;
+    setContent({ ...content, keyTakeaways: [...content.keyTakeaways, value] });
+  };
+
+  const updateAction = (index: number, value: string) => {
+    if (!content) return;
+    const newActions = [...content.actionItems];
+    newActions[index] = value;
+    setContent({ ...content, actionItems: newActions });
+  };
+
+  const deleteAction = (index: number) => {
+    if (!content) return;
+    setContent({ ...content, actionItems: content.actionItems.filter((_, i) => i !== index) });
+  };
+
+  const addAction = (value: string) => {
+    if (!content) return;
+    setContent({ ...content, actionItems: [...content.actionItems, value] });
   };
 
   if (!content) {
@@ -83,6 +273,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           <div className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-primary" />
             <h3 className="font-semibold">Smart Analysis</h3>
+            <Badge variant="outline" className="text-xs">Editable</Badge>
           </div>
           <Button variant="ghost" size="sm" onClick={handleRegenerate} disabled={isGenerating}>
             <RefreshCw className={cn("w-4 h-4", isGenerating && "animate-spin")} />
@@ -148,50 +339,70 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
         </button>
       </div>
 
-      {/* Tab Content */}
-      <div className="p-4 max-h-64 overflow-y-auto">
+      {/* Tab Content with Editing */}
+      <div className="p-4 max-h-72 overflow-y-auto">
         {activeTab === 'insights' && (
-          <ul className="space-y-3">
-            {content.insights.map((insight, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 text-xs font-medium">
-                  {i + 1}
-                </span>
-                <span className="text-foreground">{insight}</span>
-              </li>
-            ))}
-            {content.insights.length === 0 && (
-              <p className="text-muted-foreground text-sm italic">No insights extracted. Try recording more activity.</p>
-            )}
-          </ul>
+          <>
+            <ul className="space-y-3">
+              {content.insights.map((insight, i) => (
+                <EditableItem
+                  key={i}
+                  value={insight}
+                  onSave={(value) => updateInsight(i, value)}
+                  onDelete={() => deleteInsight(i)}
+                  icon={
+                    <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
+                      {i + 1}
+                    </span>
+                  }
+                />
+              ))}
+              {content.insights.length === 0 && (
+                <p className="text-muted-foreground text-sm italic">No insights extracted. Try adding your own.</p>
+              )}
+            </ul>
+            <AddItemInput onAdd={addInsight} placeholder="Add a new insight..." />
+          </>
         )}
 
         {activeTab === 'takeaways' && (
-          <ul className="space-y-3">
-            {content.keyTakeaways.map((takeaway, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="text-primary flex-shrink-0">✓</span>
-                <span className="text-foreground">{takeaway}</span>
-              </li>
-            ))}
-            {content.keyTakeaways.length === 0 && (
-              <p className="text-muted-foreground text-sm italic">No key takeaways found.</p>
-            )}
-          </ul>
+          <>
+            <ul className="space-y-3">
+              {content.keyTakeaways.map((takeaway, i) => (
+                <EditableItem
+                  key={i}
+                  value={takeaway}
+                  onSave={(value) => updateTakeaway(i, value)}
+                  onDelete={() => deleteTakeaway(i)}
+                  prefix="✓"
+                />
+              ))}
+              {content.keyTakeaways.length === 0 && (
+                <p className="text-muted-foreground text-sm italic">No key takeaways found. Add your own.</p>
+              )}
+            </ul>
+            <AddItemInput onAdd={addTakeaway} placeholder="Add a new takeaway..." />
+          </>
         )}
 
         {activeTab === 'actions' && (
-          <ul className="space-y-3">
-            {content.actionItems.map((action, i) => (
-              <li key={i} className="flex gap-3 text-sm items-start">
-                <input type="checkbox" className="mt-1 rounded border-muted-foreground" />
-                <span className="text-foreground">{action}</span>
-              </li>
-            ))}
-            {content.actionItems.length === 0 && (
-              <p className="text-muted-foreground text-sm italic">No action items suggested.</p>
-            )}
-          </ul>
+          <>
+            <ul className="space-y-3">
+              {content.actionItems.map((action, i) => (
+                <EditableItem
+                  key={i}
+                  value={action}
+                  onSave={(value) => updateAction(i, value)}
+                  onDelete={() => deleteAction(i)}
+                  showCheckbox
+                />
+              ))}
+              {content.actionItems.length === 0 && (
+                <p className="text-muted-foreground text-sm italic">No action items suggested. Add your own.</p>
+              )}
+            </ul>
+            <AddItemInput onAdd={addAction} placeholder="Add a new action item..." />
+          </>
         )}
       </div>
 
