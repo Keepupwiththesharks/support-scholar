@@ -633,13 +633,13 @@ export const ArticleGenerator = ({
     : baseProfileConfig;
   
   const exportConfig = EXPORT_FORMATS[profileType];
+  const [generationMode, setGenerationMode] = useState<'article' | 'smart'>('article');
   const [template, setTemplate] = useState<KnowledgeArticle['template']>(profileConfig.templates[0]);
   const [article, setArticle] = useState<KnowledgeArticle | null>(null);
   const [templateContent, setTemplateContent] = useState<TemplateContent | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showSmartPanel, setShowSmartPanel] = useState(true);
   const { toast } = useToast();
   const { getEnabledSections, hasCustomizations } = useTemplateSections();
 
@@ -773,6 +773,39 @@ export const ArticleGenerator = ({
         </div>
 
         <div className="p-6">
+          {/* Mode Selector */}
+          <div className="flex items-center gap-2 mb-6 p-1 bg-muted rounded-lg w-fit">
+            <button
+              onClick={() => { setGenerationMode('article'); setArticle(null); setSaved(false); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                generationMode === 'article' 
+                  ? 'bg-background text-foreground shadow-sm' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Knowledge Article
+            </button>
+            <button
+              onClick={() => { setGenerationMode('smart'); setArticle(null); setSaved(false); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                generationMode === 'smart' 
+                  ? 'bg-background text-foreground shadow-sm' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Brain className="w-4 h-4" />
+              Smart Content Analysis
+            </button>
+          </div>
+
+          {generationMode === 'smart' ? (
+            <SmartContentPanel 
+              session={session} 
+              profileType={profileType}
+              onApplyContent={handleApplySmartContent}
+            />
+          ) : (
           <Tabs value={template} onValueChange={(v) => { setTemplate(v as KnowledgeArticle['template']); setArticle(null); setSaved(false); }}>
             <div className="flex items-center justify-between mb-4">
               <TabsList className="grid grid-cols-4">
@@ -832,16 +865,6 @@ export const ArticleGenerator = ({
                       <p className="text-foreground text-sm">{article.summary}</p>
                     </div>
 
-                    {/* Smart AI Content Panel */}
-                    {showSmartPanel && (
-                      <div className="mb-6">
-                        <SmartContentPanel 
-                          session={session} 
-                          profileType={profileType}
-                          onApplyContent={handleApplySmartContent}
-                        />
-                      </div>
-                    )}
 
                     {/* Visual elements for students and researchers */}
                     <ArticleVisuals 
@@ -891,6 +914,7 @@ export const ArticleGenerator = ({
               )}
             </TabsContent>
           </Tabs>
+          )}
         </div>
 
         {article && (
