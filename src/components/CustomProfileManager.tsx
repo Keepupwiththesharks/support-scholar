@@ -49,6 +49,7 @@ import {
   MoreVertical,
   Check,
   ChevronRight,
+  Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -76,6 +77,8 @@ export const CustomProfileManager = ({
     duplicateProfile,
     exportProfile,
     importProfile,
+    setDefaultProfile,
+    getDefaultProfile,
   } = useCustomProfiles();
 
   const [activeTab, setActiveTab] = useState<'profiles' | 'create'>('profiles');
@@ -172,6 +175,16 @@ export const CustomProfileManager = ({
     toast.success('Profile duplicated');
   };
 
+  const handleSetDefault = (profile: CustomProfile) => {
+    if (profile.isDefault) {
+      setDefaultProfile(null);
+      toast.success('Default profile cleared');
+    } else {
+      setDefaultProfile(profile.id);
+      toast.success(`"${profile.name}" set as default`);
+    }
+  };
+
   const handleExport = (profile: CustomProfile) => {
     const data = exportProfile(profile.id);
     if (data) {
@@ -248,6 +261,12 @@ export const CustomProfileManager = ({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <h4 className="font-medium truncate">{profile.name}</h4>
+                              {profile.isDefault && (
+                                <Badge variant="default" className="text-xs gap-1">
+                                  <Star className="w-3 h-3" />
+                                  Default
+                                </Badge>
+                              )}
                               <Badge variant="outline" className="text-xs">
                                 Based on {profile.basedOn}
                               </Badge>
@@ -303,6 +322,13 @@ export const CustomProfileManager = ({
                                 <DropdownMenuItem onClick={() => handleExport(profile)}>
                                   <Share2 className="w-4 h-4 mr-2" />
                                   Copy Share Code
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => handleSetDefault(profile)}
+                                >
+                                  <Star className={cn("w-4 h-4 mr-2", profile.isDefault && "fill-current")} />
+                                  {profile.isDefault ? 'Remove as Default' : 'Set as Default'}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 

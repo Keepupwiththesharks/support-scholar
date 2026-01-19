@@ -11,6 +11,7 @@ export interface CustomProfile {
   basedOn: 'student' | 'developer' | 'support' | 'researcher' | 'custom';
   createdAt: Date;
   updatedAt: Date;
+  isDefault?: boolean;
 }
 
 // Available template options for custom profiles to choose from
@@ -40,6 +41,7 @@ export const PROFILE_ICONS = [
 ];
 
 const STORAGE_KEY = 'recap-custom-profiles';
+const DEFAULT_PROFILE_KEY = 'recap-default-custom-profile';
 
 export const useCustomProfiles = () => {
   const [customProfiles, setCustomProfiles] = useState<CustomProfile[]>(() => {
@@ -177,6 +179,28 @@ export const useCustomProfiles = () => {
     }
   }, []);
 
+  const setDefaultProfile = useCallback((id: string | null) => {
+    // Clear any existing default
+    setCustomProfiles(prev => prev.map(p => ({ ...p, isDefault: p.id === id })));
+    // Also store in separate key for quick access
+    if (id) {
+      localStorage.setItem(DEFAULT_PROFILE_KEY, id);
+    } else {
+      localStorage.removeItem(DEFAULT_PROFILE_KEY);
+    }
+  }, []);
+
+  const getDefaultProfile = useCallback((): CustomProfile | null => {
+    const defaultId = localStorage.getItem(DEFAULT_PROFILE_KEY);
+    if (!defaultId) return null;
+    return customProfiles.find(p => p.id === defaultId) || null;
+  }, [customProfiles]);
+
+  const clearDefault = useCallback(() => {
+    setCustomProfiles(prev => prev.map(p => ({ ...p, isDefault: false })));
+    localStorage.removeItem(DEFAULT_PROFILE_KEY);
+  }, []);
+
   return {
     customProfiles,
     createProfile,
@@ -186,5 +210,8 @@ export const useCustomProfiles = () => {
     getProfileById,
     exportProfile,
     importProfile,
+    setDefaultProfile,
+    getDefaultProfile,
+    clearDefault,
   };
 };
