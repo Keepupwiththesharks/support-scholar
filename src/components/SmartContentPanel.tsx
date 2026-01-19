@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X } from 'lucide-react';
+import { Sparkles, Brain, Lightbulb, Target, ArrowRight, TrendingUp, RefreshCw, Pencil, Trash2, Plus, Check, X, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -7,6 +7,23 @@ import { Input } from '@/components/ui/input';
 import { RecordingSession, UserProfileType } from '@/types';
 import { generateSmartContent, GeneratedContent } from '@/lib/contentGenerationEngine';
 import { cn } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface SmartContentPanelProps {
   session: RecordingSession;
@@ -14,8 +31,10 @@ interface SmartContentPanelProps {
   onApplyContent?: (content: GeneratedContent) => void;
 }
 
-interface EditableItemProps {
+interface SortableItemProps {
+  id: string;
   value: string;
+  index: number;
   onSave: (value: string) => void;
   onDelete: () => void;
   icon?: React.ReactNode;
@@ -23,9 +42,23 @@ interface EditableItemProps {
   showCheckbox?: boolean;
 }
 
-const EditableItem = ({ value, onSave, onDelete, icon, prefix, showCheckbox }: EditableItemProps) => {
+const SortableItem = ({ id, value, index, onSave, onDelete, icon, prefix, showCheckbox }: SortableItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   const handleSave = () => {
     if (editValue.trim()) {
@@ -41,7 +74,7 @@ const EditableItem = ({ value, onSave, onDelete, icon, prefix, showCheckbox }: E
 
   if (isEditing) {
     return (
-      <li className="flex gap-2 items-center">
+      <li ref={setNodeRef} style={style} className="flex gap-2 items-center bg-card">
         <Input
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
@@ -63,8 +96,22 @@ const EditableItem = ({ value, onSave, onDelete, icon, prefix, showCheckbox }: E
   }
 
   return (
-    <li className="flex gap-3 text-sm group items-start">
-      {showCheckbox && <input type="checkbox" className="mt-1 rounded border-muted-foreground" />}
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex gap-2 text-sm group items-center py-1.5 px-2 -mx-2 rounded-lg transition-colors",
+        isDragging ? "bg-primary/10 shadow-lg z-50" : "hover:bg-muted/50"
+      )}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground touch-none"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      {showCheckbox && <input type="checkbox" className="rounded border-muted-foreground" />}
       {icon && <span className="flex-shrink-0">{icon}</span>}
       {prefix && <span className="text-primary flex-shrink-0">{prefix}</span>}
       <span className="text-foreground flex-1">{value}</span>
@@ -157,6 +204,11 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'insights' | 'takeaways' | 'actions'>('insights');
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -171,6 +223,37 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
     const generated = generateSmartContent(session, profileType);
     setContent(generated);
     setIsGenerating(false);
+  };
+
+  // Drag end handlers
+  const handleInsightsDragEnd = (event: DragEndEvent) => {
+    if (!content) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = content.insights.findIndex((_, i) => `insight-${i}` === active.id);
+      const newIndex = content.insights.findIndex((_, i) => `insight-${i}` === over.id);
+      setContent({ ...content, insights: arrayMove(content.insights, oldIndex, newIndex) });
+    }
+  };
+
+  const handleTakeawaysDragEnd = (event: DragEndEvent) => {
+    if (!content) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = content.keyTakeaways.findIndex((_, i) => `takeaway-${i}` === active.id);
+      const newIndex = content.keyTakeaways.findIndex((_, i) => `takeaway-${i}` === over.id);
+      setContent({ ...content, keyTakeaways: arrayMove(content.keyTakeaways, oldIndex, newIndex) });
+    }
+  };
+
+  const handleActionsDragEnd = (event: DragEndEvent) => {
+    if (!content) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = content.actionItems.findIndex((_, i) => `action-${i}` === active.id);
+      const newIndex = content.actionItems.findIndex((_, i) => `action-${i}` === over.id);
+      setContent({ ...content, actionItems: arrayMove(content.actionItems, oldIndex, newIndex) });
+    }
   };
 
   // Editing handlers
@@ -273,7 +356,7 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
           <div className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-primary" />
             <h3 className="font-semibold">Smart Analysis</h3>
-            <Badge variant="outline" className="text-xs">Editable</Badge>
+            <Badge variant="outline" className="text-xs">Drag to reorder</Badge>
           </div>
           <Button variant="ghost" size="sm" onClick={handleRegenerate} disabled={isGenerating}>
             <RefreshCw className={cn("w-4 h-4", isGenerating && "animate-spin")} />
@@ -339,68 +422,86 @@ export const SmartContentPanel = ({ session, profileType, onApplyContent }: Smar
         </button>
       </div>
 
-      {/* Tab Content with Editing */}
+      {/* Tab Content with Drag & Drop */}
       <div className="p-4 max-h-72 overflow-y-auto">
         {activeTab === 'insights' && (
           <>
-            <ul className="space-y-3">
-              {content.insights.map((insight, i) => (
-                <EditableItem
-                  key={i}
-                  value={insight}
-                  onSave={(value) => updateInsight(i, value)}
-                  onDelete={() => deleteInsight(i)}
-                  icon={
-                    <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
-                      {i + 1}
-                    </span>
-                  }
-                />
-              ))}
-              {content.insights.length === 0 && (
-                <p className="text-muted-foreground text-sm italic">No insights extracted. Try adding your own.</p>
-              )}
-            </ul>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleInsightsDragEnd}>
+              <SortableContext items={content.insights.map((_, i) => `insight-${i}`)} strategy={verticalListSortingStrategy}>
+                <ul className="space-y-1">
+                  {content.insights.map((insight, i) => (
+                    <SortableItem
+                      key={`insight-${i}`}
+                      id={`insight-${i}`}
+                      index={i}
+                      value={insight}
+                      onSave={(value) => updateInsight(i, value)}
+                      onDelete={() => deleteInsight(i)}
+                      icon={
+                        <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
+                          {i + 1}
+                        </span>
+                      }
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+            {content.insights.length === 0 && (
+              <p className="text-muted-foreground text-sm italic">No insights extracted. Try adding your own.</p>
+            )}
             <AddItemInput onAdd={addInsight} placeholder="Add a new insight..." />
           </>
         )}
 
         {activeTab === 'takeaways' && (
           <>
-            <ul className="space-y-3">
-              {content.keyTakeaways.map((takeaway, i) => (
-                <EditableItem
-                  key={i}
-                  value={takeaway}
-                  onSave={(value) => updateTakeaway(i, value)}
-                  onDelete={() => deleteTakeaway(i)}
-                  prefix="✓"
-                />
-              ))}
-              {content.keyTakeaways.length === 0 && (
-                <p className="text-muted-foreground text-sm italic">No key takeaways found. Add your own.</p>
-              )}
-            </ul>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTakeawaysDragEnd}>
+              <SortableContext items={content.keyTakeaways.map((_, i) => `takeaway-${i}`)} strategy={verticalListSortingStrategy}>
+                <ul className="space-y-1">
+                  {content.keyTakeaways.map((takeaway, i) => (
+                    <SortableItem
+                      key={`takeaway-${i}`}
+                      id={`takeaway-${i}`}
+                      index={i}
+                      value={takeaway}
+                      onSave={(value) => updateTakeaway(i, value)}
+                      onDelete={() => deleteTakeaway(i)}
+                      prefix="✓"
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+            {content.keyTakeaways.length === 0 && (
+              <p className="text-muted-foreground text-sm italic">No key takeaways found. Add your own.</p>
+            )}
             <AddItemInput onAdd={addTakeaway} placeholder="Add a new takeaway..." />
           </>
         )}
 
         {activeTab === 'actions' && (
           <>
-            <ul className="space-y-3">
-              {content.actionItems.map((action, i) => (
-                <EditableItem
-                  key={i}
-                  value={action}
-                  onSave={(value) => updateAction(i, value)}
-                  onDelete={() => deleteAction(i)}
-                  showCheckbox
-                />
-              ))}
-              {content.actionItems.length === 0 && (
-                <p className="text-muted-foreground text-sm italic">No action items suggested. Add your own.</p>
-              )}
-            </ul>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleActionsDragEnd}>
+              <SortableContext items={content.actionItems.map((_, i) => `action-${i}`)} strategy={verticalListSortingStrategy}>
+                <ul className="space-y-1">
+                  {content.actionItems.map((action, i) => (
+                    <SortableItem
+                      key={`action-${i}`}
+                      id={`action-${i}`}
+                      index={i}
+                      value={action}
+                      onSave={(value) => updateAction(i, value)}
+                      onDelete={() => deleteAction(i)}
+                      showCheckbox
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+            {content.actionItems.length === 0 && (
+              <p className="text-muted-foreground text-sm italic">No action items suggested. Add your own.</p>
+            )}
             <AddItemInput onAdd={addAction} placeholder="Add a new action item..." />
           </>
         )}
