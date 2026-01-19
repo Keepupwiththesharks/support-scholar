@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, Variants, useScroll, useTransform } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { RecordingControls } from '@/components/RecordingControls';
@@ -6,6 +6,8 @@ import { ActivityTimeline } from '@/components/ActivityTimeline';
 import { SessionCard } from '@/components/SessionCard';
 import { ArticleGenerator } from '@/components/ArticleGenerator';
 import { ProfileSelector } from '@/components/ProfileSelector';
+import { ProductTour } from '@/components/ProductTour';
+import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { useRecording } from '@/hooks/useRecording';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useArticleLibrary } from '@/hooks/useArticleLibrary';
@@ -104,6 +106,27 @@ const Index = () => {
 
   const [selectedSession, setSelectedSession] = useState<RecordingSession | null>(null);
   const [showApp, setShowApp] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+
+  // Check if user has seen the tour
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('recap-tour-completed');
+    if (!hasSeenTour) {
+      // Small delay to let the page load first
+      const timer = setTimeout(() => setShowTour(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleTourComplete = () => {
+    localStorage.setItem('recap-tour-completed', 'true');
+    setShowTour(false);
+  };
+
+  const handleTourSkip = () => {
+    localStorage.setItem('recap-tour-completed', 'true');
+    setShowTour(false);
+  };
 
   const profileLabels: Record<UserProfileType | 'all', string> = {
     all: 'All Profiles',
@@ -593,23 +616,41 @@ const Index = () => {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
-            className="flex flex-wrap items-center justify-center gap-8 mt-12 text-muted-foreground"
+            className="flex flex-wrap items-center justify-center gap-12 mt-12"
           >
-            {[
-              { icon: Users, text: "10k+ users" },
-              { icon: FileText, text: "50k+ recaps created" },
-              { icon: Clock, text: "100k+ hours saved" }
-            ].map((stat, index) => (
-              <motion.div 
-                key={stat.text}
-                variants={fadeInScale}
-                className="flex items-center gap-2"
-                whileHover={{ scale: 1.05 }}
-              >
-                <stat.icon className="w-5 h-5" />
-                <span>{stat.text}</span>
-              </motion.div>
-            ))}
+            <motion.div 
+              variants={fadeInScale}
+              className="flex items-center gap-3 text-foreground"
+              whileHover={{ scale: 1.05 }}
+            >
+              <Users className="w-6 h-6 text-amber-500" />
+              <div className="text-left">
+                <AnimatedCounter end={10000} suffix="+" className="text-2xl font-bold" />
+                <p className="text-sm text-muted-foreground">Active users</p>
+              </div>
+            </motion.div>
+            <motion.div 
+              variants={fadeInScale}
+              className="flex items-center gap-3 text-foreground"
+              whileHover={{ scale: 1.05 }}
+            >
+              <FileText className="w-6 h-6 text-orange-500" />
+              <div className="text-left">
+                <AnimatedCounter end={50000} suffix="+" delay={0.2} className="text-2xl font-bold" />
+                <p className="text-sm text-muted-foreground">Recaps created</p>
+              </div>
+            </motion.div>
+            <motion.div 
+              variants={fadeInScale}
+              className="flex items-center gap-3 text-foreground"
+              whileHover={{ scale: 1.05 }}
+            >
+              <Clock className="w-6 h-6 text-rose-500" />
+              <div className="text-left">
+                <AnimatedCounter end={100000} suffix="+" delay={0.4} className="text-2xl font-bold" />
+                <p className="text-sm text-muted-foreground">Hours saved</p>
+              </div>
+            </motion.div>
           </motion.div>
         </div>
       </section>
@@ -719,6 +760,11 @@ const Index = () => {
           </div>
         </div>
       </motion.footer>
+
+      {/* Product Tour */}
+      {showTour && (
+        <ProductTour onComplete={handleTourComplete} onSkip={handleTourSkip} />
+      )}
     </div>
   );
 };
