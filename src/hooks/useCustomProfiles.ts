@@ -330,26 +330,44 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
 
 const STORAGE_KEY = 'recap-custom-profiles';
 const DEFAULT_PROFILE_KEY = 'recap-default-custom-profile';
+const PROFILES_CHANGED_EVENT = 'recap-profiles-changed';
+
+// Custom event to sync profiles across hook instances
+const notifyProfilesChanged = () => {
+  window.dispatchEvent(new CustomEvent(PROFILES_CHANGED_EVENT));
+};
+
+const readProfilesFromStorage = (): CustomProfile[] => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.map((p: CustomProfile) => ({
+        ...p,
+        createdAt: new Date(p.createdAt),
+        updatedAt: new Date(p.updatedAt),
+      }));
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return [];
+};
 
 export const useCustomProfiles = () => {
-  const [customProfiles, setCustomProfiles] = useState<CustomProfile[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return parsed.map((p: CustomProfile) => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt),
-        }));
-      }
-    } catch {
-      // Ignore parse errors
-    }
-    return [];
-  });
+  const [customProfiles, setCustomProfiles] = useState<CustomProfile[]>(readProfilesFromStorage);
 
-  // Save to localStorage whenever profiles change
+  // Listen for changes from other hook instances
+  useEffect(() => {
+    const handleProfilesChanged = () => {
+      setCustomProfiles(readProfilesFromStorage());
+    };
+
+    window.addEventListener(PROFILES_CHANGED_EVENT, handleProfilesChanged);
+    return () => window.removeEventListener(PROFILES_CHANGED_EVENT, handleProfilesChanged);
+  }, []);
+
+  // Save to localStorage whenever profiles change and notify other instances
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(customProfiles));
   }, [customProfiles]);
@@ -381,6 +399,7 @@ export const useCustomProfiles = () => {
     };
     
     setCustomProfiles(prev => [...prev, newProfile]);
+    setTimeout(notifyProfilesChanged, 0);
     return newProfile;
   }, []);
 
@@ -393,10 +412,12 @@ export const useCustomProfiles = () => {
         ? { ...p, ...updates, updatedAt: new Date() }
         : p
     ));
+    setTimeout(notifyProfilesChanged, 0);
   }, []);
 
   const deleteProfile = useCallback((id: string) => {
     setCustomProfiles(prev => prev.filter(p => p.id !== id));
+    setTimeout(notifyProfilesChanged, 0);
   }, []);
 
   const duplicateProfile = useCallback((id: string, newName: string): CustomProfile | undefined => {
@@ -413,6 +434,7 @@ export const useCustomProfiles = () => {
     };
 
     setCustomProfiles(prev => [...prev, duplicate]);
+    setTimeout(notifyProfilesChanged, 0);
     return duplicate;
   }, [customProfiles]);
 
@@ -460,6 +482,7 @@ export const useCustomProfiles = () => {
       };
 
       setCustomProfiles(prev => [...prev, imported]);
+      setTimeout(notifyProfilesChanged, 0);
       return imported;
     } catch (error) {
       console.error('Failed to import profile:', error);
