@@ -22,6 +22,8 @@ interface ArticleGeneratorProps {
   profileType: UserProfileType;
   onClose: () => void;
   onSaveArticle?: (article: SavedArticle) => void;
+  customProfileName?: string;
+  customOutputTemplates?: string[];
 }
 
 // Profile-specific template configurations
@@ -140,6 +142,71 @@ const EXPORT_FORMATS: Record<UserProfileType, { formats: string[]; labels: Recor
       txt: <FileType className="w-4 h-4" />,
     },
   },
+};
+
+// Helper functions to map custom template IDs to the article generator's template structure
+const TEMPLATE_ID_TO_TYPE: Record<string, KnowledgeArticle['template']> = {
+  'study-guide': 'microsoft',
+  'flashcards': 'custom',
+  'lecture-notes': 'confluence',
+  'summary': 'salesforce',
+  'dev-docs': 'confluence',
+  'changelog': 'custom',
+  'debug-log': 'salesforce',
+  'readme': 'microsoft',
+  'knowledge-base': 'salesforce',
+  'ticket-summary': 'custom',
+  'runbook': 'confluence',
+  'research-notes': 'microsoft',
+  'bibliography': 'custom',
+  'findings': 'salesforce',
+  'meeting-notes': 'confluence',
+  'simple': 'custom',
+  'detailed': 'microsoft',
+};
+
+const TEMPLATE_ID_LABELS: Record<string, string> = {
+  'study-guide': 'Study Guide',
+  'flashcards': 'Flashcards',
+  'lecture-notes': 'Lecture Notes',
+  'summary': 'Summary',
+  'dev-docs': 'Dev Docs',
+  'changelog': 'Changelog',
+  'debug-log': 'Debug Log',
+  'readme': 'README',
+  'knowledge-base': 'Knowledge Base',
+  'ticket-summary': 'Ticket Summary',
+  'runbook': 'Runbook',
+  'research-notes': 'Research Notes',
+  'bibliography': 'Bibliography',
+  'findings': 'Findings',
+  'meeting-notes': 'Meeting Notes',
+  'simple': 'Simple',
+  'detailed': 'Detailed',
+};
+
+const getTemplatesFromCustomList = (templateIds: string[]): KnowledgeArticle['template'][] => {
+  const mapped = templateIds
+    .map(id => TEMPLATE_ID_TO_TYPE[id])
+    .filter((t): t is KnowledgeArticle['template'] => t !== undefined);
+  // Ensure uniqueness and at least one template
+  const unique = [...new Set(mapped)];
+  return unique.length > 0 ? unique : ['custom'];
+};
+
+const getLabelsFromCustomList = (templateIds: string[]): Record<string, string> => {
+  const labels: Record<string, string> = {};
+  templateIds.forEach(id => {
+    const type = TEMPLATE_ID_TO_TYPE[id];
+    if (type && TEMPLATE_ID_LABELS[id]) {
+      labels[type] = TEMPLATE_ID_LABELS[id];
+    }
+  });
+  // Ensure we have at least one
+  if (Object.keys(labels).length === 0) {
+    labels['custom'] = 'Simple';
+  }
+  return labels;
 };
 
 // Template-specific content structure interfaces
@@ -546,8 +613,25 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
   URL.revokeObjectURL(url);
 };
 
-export const ArticleGenerator = ({ session, profileType, onClose, onSaveArticle }: ArticleGeneratorProps) => {
-  const profileConfig = PROFILE_TEMPLATES[profileType];
+export const ArticleGenerator = ({ 
+  session, 
+  profileType, 
+  onClose, 
+  onSaveArticle,
+  customProfileName,
+  customOutputTemplates,
+}: ArticleGeneratorProps) => {
+  // Determine the profile config - use custom templates if provided, otherwise use standard
+  const baseProfileConfig = PROFILE_TEMPLATES[profileType];
+  
+  // For custom profiles, map their template IDs to the available template structure
+  const profileConfig = customOutputTemplates && customOutputTemplates.length > 0
+    ? {
+        templates: getTemplatesFromCustomList(customOutputTemplates),
+        labels: getLabelsFromCustomList(customOutputTemplates),
+      }
+    : baseProfileConfig;
+  
   const exportConfig = EXPORT_FORMATS[profileType];
   const [template, setTemplate] = useState<KnowledgeArticle['template']>(profileConfig.templates[0]);
   const [article, setArticle] = useState<KnowledgeArticle | null>(null);
