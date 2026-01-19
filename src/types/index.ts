@@ -125,6 +125,14 @@ export interface ActivityEvent {
   url?: string;
   screenshot?: string;
   metadata?: Record<string, unknown>;
+  // Rich content captured from the activity
+  content?: {
+    text?: string;         // Text content, notes, or snippets
+    code?: string;         // Code snippets from IDEs/terminals
+    summary?: string;      // AI-generated or extracted summary
+    highlights?: string[]; // Key points or highlighted text
+    attachments?: string[]; // File references or links
+  };
 }
 
 export interface RecordingSession {
@@ -137,6 +145,19 @@ export interface RecordingSession {
   ticketId?: string;
   tags: string[];
   profileType?: UserProfileType;
+}
+
+export interface SavedArticle {
+  id: string;
+  title: string;
+  summary: string;
+  sections: { label: string; content: string | string[] }[];
+  tags: string[];
+  createdAt: Date;
+  sessionId: string;
+  profileType: UserProfileType;
+  templateType: string;
+  templateLabel: string;
 }
 
 export interface KnowledgeArticle {
