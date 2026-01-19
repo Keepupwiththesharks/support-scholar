@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion, Variants } from 'framer-motion';
+import { useState, useRef } from 'react';
+import { motion, Variants, useScroll, useTransform } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { RecordingControls } from '@/components/RecordingControls';
 import { ActivityTimeline } from '@/components/ActivityTimeline';
@@ -62,6 +62,18 @@ const slideInRight: Variants = {
 };
 
 const Index = () => {
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"]
+  });
+  
+  // Parallax transforms for background elements
+  const bgY1 = useTransform(scrollYProgress, [0, 1], [0, 150]);
+  const bgY2 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+  const bgScale = useTransform(scrollYProgress, [0, 1], [1, 1.2]);
+  const bgOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  
   const {
     profileType,
     customPreferences,
@@ -300,11 +312,21 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background overflow-hidden">
-      {/* Warm gradient background */}
-      <div className="fixed inset-0 -z-10">
+      {/* Warm gradient background with parallax */}
+      <div className="fixed inset-0 -z-10 overflow-hidden" ref={heroRef}>
         <div className="absolute inset-0 bg-gradient-to-br from-amber-50 via-orange-50/50 to-rose-50 dark:from-amber-950/20 dark:via-background dark:to-rose-950/20" />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-amber-200/30 to-orange-200/20 dark:from-amber-800/10 dark:to-orange-800/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-rose-200/30 to-pink-200/20 dark:from-rose-800/10 dark:to-pink-800/5 rounded-full blur-3xl" />
+        <motion.div 
+          className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-amber-200/30 to-orange-200/20 dark:from-amber-800/10 dark:to-orange-800/5 rounded-full blur-3xl"
+          style={{ y: bgY1, scale: bgScale, opacity: bgOpacity }}
+        />
+        <motion.div 
+          className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-rose-200/30 to-pink-200/20 dark:from-rose-800/10 dark:to-pink-800/5 rounded-full blur-3xl"
+          style={{ y: bgY2, scale: bgScale, opacity: bgOpacity }}
+        />
+        <motion.div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-violet-200/10 to-purple-200/10 dark:from-violet-800/5 dark:to-purple-800/5 rounded-full blur-3xl"
+          style={{ y: useTransform(scrollYProgress, [0, 1], [0, 200]), opacity: bgOpacity }}
+        />
       </div>
 
       <Header />
